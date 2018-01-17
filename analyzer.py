@@ -1,18 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# TODO Schicker Multibalken-Plot (min max average) oder error linie
-# TODO Vielleicht Nachrichten über den Gesamtzeitraum
-# TODO Average Words as Share macht keinen Sinn - umändern zu Total Words as Share
-# TODO Zu total messages noch den zeitraum schreibe# TODO Zu total messages noch den zeitraum schreibenn
-
 import random
 import numpy as np
 import matplotlib.pyplot as plt, matplotlib.colors as clrs
 from scipy.interpolate import interp1d
 from datetime import date
 
-FILE = '/home/felix/Desktop/_chat.txt'
+FILE = 'data/_chat.txt'
 COLORS = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
 DAYS = 0
 
@@ -112,7 +107,7 @@ def plot_general():
 
 
 def plot_user_spec():
-    """Visualize data concerning the single users"""
+    """Visualizes data concerning the single users"""
     global members
 
     # Set window title

@@ -3,23 +3,26 @@
 
 import random
 import numpy as np
-import matplotlib.pyplot as plt, matplotlib.colors as clrs
+import matplotlib.pyplot as plt, matplotlib.colors as clrs, matplotlib.dates as mdts
+import datetime as dt
 from scipy.interpolate import interp1d
-from datetime import date
 
 FILE = 'data/_chat.txt'
-COLORS = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
-
+# Colors used when plotting user specific information
+SPEC_THEME = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
+# Colors used when plotting general information
+GNRL_THEME = ['#14325c', '#d96b0c', '#5398d9', '#a53a3b']
 
 class Member:
     """Represents one chat participator"""
 
-    def __init__(self, name):
+    def __init__(self, name, first):
         """Initializes object and sets variables to default values"""
         self.name = name  # No support for phone numbers
         self.wc = 0  # Word count
         self.words = {}
         self.hours = [0 for _ in range(24)]  # Number of messages written in that hour
+        self.first = first  # Date of first message
 
     def add_message(self, message, hour):
         """Adds message data to the user object"""
@@ -36,11 +39,14 @@ class Member:
             self.wc += 1
 
 
+def string_to_date(s):
+    """Converts string of the format dd.mm.yy to a datetime object"""
+    return dt.date(2000+int(s[6:8]), int(s[3:5]), int(s[:2]))
+
+
 def date_diff(msg1, msg2):
-    """Calculates number of days that lie between the two given messages"""
-    dt1 = date(2000+int(msg1[6:8]), int(msg1[3:5]), int(msg1[:2]))
-    dt2 = date(2000+int(msg2[6:8]), int(msg2[3:5]), int(msg2[:2]))
-    return (dt2 - dt1).days
+    """Calculates number of days that lie between two given messages"""
+    return (string_to_date(msg2) - string_to_date(msg1)).days
 
 
 def process(chat):
@@ -51,8 +57,8 @@ def process(chat):
     # Initialize vars
     members = []
     first = chat[0]
-    period = date_diff(first, chat[-1])
-    days = [0 for _ in range(period+1)]
+    period = date_diff(first, chat[-1]) + 1
+    days = [0 for _ in range(period)]
     # Process messages
     for line in chat:
         try:
@@ -66,11 +72,11 @@ def process(chat):
         else:
             days[date_diff(first, date)] += 1
             if all(member.name != name for member in members):
-                members.append(Member(name))
+                members.append(Member(name, string_to_date(date)))
             for member in members:
                 if member.name == name:
                     member.add_message(line, hour)
-    return members, days, period
+    return members, days
 
 
 def plot_general(members, days, period):
@@ -81,10 +87,24 @@ def plot_general(members, days, period):
 
     # Plot sum of messages for every day
     plt.subplot(211)
-    plt.plot(days)
-    plt.grid()
-    plt.title('Messages Sent during %d Days' % period)
-    plt.xlabel('Day since First Message')
+    # Set up date xlables
+    x = [min(m.first for m in members) + dt.timedelta(days=i) for i in range(period)]
+    plt.gca().xaxis.set_major_formatter(mdts.DateFormatter('%b %Y'))
+    plt.gca().xaxis.set_major_locator(mdts.MonthLocator(interval=3))
+    # Plot monthly average
+    first = min(m.first for m in members)
+    start = first if first.day==1 else first.replace(day=1, month=first.month+1)  # Date of next first of the month
+    m_diff = ((first + dt.timedelta(days=period)).year - start.year) * 12 + (first + dt.timedelta(days=period)).month - start.month
+    idxs = [(start.replace(month=(start.month+i) % 12 + 1, year=start.year + ((start.month+i) / 12)) - first).days for i in range(0, m_diff)]
+    idxs.insert(0, (start-first).days)
+    xe = [x[i] for i in idxs[:-1]]
+    months = [np.mean(days[idxs[i]:idxs[i+1]]) for i in range(len(idxs)-1)]
+    plt.bar(xe, months, [idxs[i]-idxs[i-1] for i in range(1, len(idxs))], color=GNRL_THEME[1], align='edge')
+    # Plot message count on all days
+    plt.plot(x, days, GNRL_THEME[0])
+    plt.gca().yaxis.grid(True)
+    plt.legend(['Total Number of Messages on that Day', 'Average Number of Messages in that Month'], loc=2)
+    plt.title('Total Messages Sent')
     plt.ylabel('#Messages')
 
     # Plot overall message count average per hour of the day
@@ -92,7 +112,7 @@ def plot_general(members, days, period):
     y = [e / float(period) for e in [sum([m.hours[i] for m in members]) for i in range(24)]]
     f = interp1d([i for i in range(24)], y, kind='cubic')
     plt.subplot(212)
-    plt.plot(x, f(x), 'red')
+    plt.plot(x, f(x), GNRL_THEME[2])
     plt.xticks(np.arange(min(x), max(x)+1, 2.0))
     plt.grid()
     plt.title('Average Messages per Hour')
@@ -109,9 +129,9 @@ def plot_general(members, days, period):
                 mx_l = m.name.split()[0][:1] + '.' + m.name.split()[1][:1] + '.'
         y.append(mx_m / float(period))
         lbs.append(mx_l)
-    plt.scatter(range(24), y, color='blue')
+    plt.scatter(range(24), y, color=GNRL_THEME[3])
     for i in range(24):
-        plt.annotate(lbs[i], (i, y[i]), xytext=(5, 5), textcoords='offset points') 
+        plt.annotate(lbs[i], (i, y[i]), xytext=(5, 5), textcoords='offset points')
     plt.legend(['All Users Together', 'Most Active User in that Hour'], loc=2)
 
     # Show plots
@@ -124,7 +144,7 @@ def plot_user_spec(members, period):
     # Set window title
     plt.figure().canvas.set_window_title('Whatsapp Analyzer')
     # Set colors
-    colors = COLORS[:len(members)] if len(members) <= len(COLORS) else random.sample(clrs.cnames, len(members))
+    colors = SPEC_THEME[:len(members)] if len(members) <= len(SPEC_THEME) else random.sample(clrs.cnames, len(members))
 
     # Total message count for each member as bar graph
     members = sorted(members, key=lambda m: sum(m.hours))
@@ -185,7 +205,8 @@ def plot_user_spec(members, period):
 
 def main():
     """Main function"""
-    members, days, period = process(FILE)
+    members, days = process(FILE)
+    period = len(days)
     plot_general(members, days, period)
     #plot_user_spec(members, period)
 

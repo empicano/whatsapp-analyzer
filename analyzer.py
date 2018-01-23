@@ -5,29 +5,31 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt, matplotlib.colors as clrs, matplotlib.dates as mdts
 import datetime as dt
+
 from scipy.interpolate import interp1d
 
-FILE = 'data/_chat.txt'
-# Colors used when plotting user specific information
+FILE = 'data/_chat_2017.txt'
+# colors used when plotting user specific information
 SPEC_THEME = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
-# Colors used when plotting general information
-GNRL_THEME = ['#14325c', '#d96b0c', '#5398d9', '#a53a3b']
+# colors used when plotting general information
+GNRL_THEME = ['#14325c', '#c9c9c9', '#5398d9', '#ff0000']
+
 
 class Member:
     """Represents one chat participator"""
 
     def __init__(self, name, first):
         """Initializes object and sets variables to default values"""
-        self.name = name  # No support for phone numbers
-        self.wc = 0  # Word count
+        self.name = name  # no support for phone numbers
+        self.wc = 0  # word count
         self.words = {}
-        self.hours = [0 for _ in range(24)]  # Number of messages written in that hour
-        self.first = first  # Date of first message
+        self.hours = [0 for _ in range(24)]  # number of messages written in that hour
+        self.first = first  # date of first message
 
     def add_message(self, message, hour):
         """Adds message data to the user object"""
         self.hours[hour] += 1
-        # Clear words of dots, quotation marks etc.
+        # clear words of dots, quotation marks etc.
         for word in message.split():
             word = word.lower()
             while len(word) > 1 and word[-1] in '-,."\'!?:)—':
@@ -54,12 +56,12 @@ def process(chat):
     data = open(chat, 'r')
     chat = data.readlines()
     data.close()
-    # Initialize vars
+    # initialize vars
     members = []
     first = chat[0]
     period = date_diff(first, chat[-1]) + 1
     days = [0 for _ in range(period)]
-    # Process messages
+    # process messages
     for line in chat:
         try:
             date = line[:8]
@@ -68,7 +70,7 @@ def process(chat):
             name = line[:line.index(':')].decode('utf-8')
             line = line[line.index(': ') + 2:]
         except ValueError:
-            pass  # Ignore corrupted messages
+            pass  # ignore corrupted messages
         else:
             days[date_diff(first, date)] += 1
             if all(member.name != name for member in members):
@@ -82,34 +84,47 @@ def process(chat):
 def plot_general(members, days, period):
     """Visualizes data concerning all users"""
 
-    # Set window title
+    # set window title
     plt.figure().canvas.set_window_title('Whatsapp Analyzer')
 
-    # Plot sum of messages for every day
+    # plot monthly average of messages per day
     plt.subplot(211)
-    # Set up date xlables
-    x = [min(m.first for m in members) + dt.timedelta(days=i) for i in range(period)]
+    # set up date xlables
+    dates = [min(m.first for m in members) + dt.timedelta(days=i) for i in range(period)]
     plt.gca().xaxis.set_major_formatter(mdts.DateFormatter('%b %Y'))
-    plt.gca().xaxis.set_major_locator(mdts.MonthLocator(interval=3))
-    # Plot monthly average
+    plt.gca().xaxis.set_major_locator(mdts.MonthLocator(interval=(period / 300) or 1))
+    # convert from daily message count to monthly average
     first = min(m.first for m in members)
-    start = first if first.day==1 else first.replace(day=1, month=first.month+1)  # Date of next first of the month
+    start = first if first.day==1 else first.replace(day=1, month=first.month+1)
     m_diff = ((first + dt.timedelta(days=period)).year - start.year) * 12 + (first + dt.timedelta(days=period)).month - start.month
     idxs = [(start.replace(month=(start.month+i) % 12 + 1, year=start.year + ((start.month+i) / 12)) - first).days for i in range(0, m_diff)]
     idxs.insert(0, (start-first).days)
-    xe = [x[i] for i in idxs[:-1]]
+    x = [dates[i] for i in idxs[:-1]]
     months = [np.mean(days[idxs[i]:idxs[i+1]]) for i in range(len(idxs)-1)]
-    plt.bar(xe, months, [idxs[i]-idxs[i-1] for i in range(1, len(idxs))], color=GNRL_THEME[1], align='edge')
-    # Plot message count on all days
-    plt.plot(x, days, GNRL_THEME[0])
-    plt.gca().yaxis.grid(True)
-    plt.legend(['Total Number of Messages on that Day', 'Average Number of Messages in that Month'], loc=2)
-    plt.title('Total Messages Sent')
-    plt.ylabel('#Messages')
+    # plot bars
+    plt.bar(x, months, [idxs[i]-idxs[i-1] for i in range(1, len(idxs))], color=GNRL_THEME[1], align='edge')
 
-    # Plot overall message count average per hour of the day
+    # plot message count on all days
+    plt.plot(dates, days, GNRL_THEME[0])
+    plt.ylim([0, max(days)*1.1])
+    plt.gca().yaxis.grid(True)
+    plt.legend(['On specific Day', 'On Average in specific Month'], loc=2)
+    plt.title('Messages Sent')
+    plt.ylabel('#Messages')
+    # annotate maxima
+    mxma = []
+    cp = days[:]
+    for i in range(3):
+        mxma.append((dates[days.index(max(cp))], max(cp)))
+        cp.remove(max(cp))
+    for mxm in mxma:
+        plt.annotate(mxm[0].strftime('%a, %d.%m.%Y'), xy=mxm,
+                     xytext=(30, 0), textcoords='offset points', verticalalignment='center', arrowprops=dict(arrowstyle='->'))
+
+    # plot overall message count average per hour of the day
     x = np.linspace(0, 23, num=128, endpoint=True)
     y = [e / float(period) for e in [sum([m.hours[i] for m in members]) for i in range(24)]]
+    # cubic interpolate
     f = interp1d([i for i in range(24)], y, kind='cubic')
     plt.subplot(212)
     plt.plot(x, f(x), GNRL_THEME[2])
@@ -119,7 +134,7 @@ def plot_general(members, days, period):
     plt.xlabel('Hour of the Day')
     plt.ylabel('#Messages')
 
-    # Plot highest user specific message count average per hour of the day
+    # plot average number of messages of most active user in that hour
     y, lbs = [], []
     for i in range(24):
         mx_l, mx_m = '', -1
@@ -130,76 +145,76 @@ def plot_general(members, days, period):
         y.append(mx_m / float(period))
         lbs.append(mx_l)
     plt.scatter(range(24), y, color=GNRL_THEME[3])
+    # annotate points with initials
     for i in range(24):
-        plt.annotate(lbs[i], (i, y[i]), xytext=(5, 5), textcoords='offset points')
+        plt.annotate(lbs[i], xy=(i, y[i]), xytext=(5, 5), textcoords='offset points')
     plt.legend(['All Users Together', 'Most Active User in that Hour'], loc=2)
 
-    # Show plots
+    # show plots
     plt.show()
 
 
-def plot_user_spec(members, period):
+def plot_users(members, period):
     """Visualizes data concerning specific users"""
 
-    # Set window title
+    # set window title
     plt.figure().canvas.set_window_title('Whatsapp Analyzer')
-    # Set colors
+    # set colors
     colors = SPEC_THEME[:len(members)] if len(members) <= len(SPEC_THEME) else random.sample(clrs.cnames, len(members))
 
-    # Total message count for each member as bar graph
+    # total message count for each member as bar graph
     members = sorted(members, key=lambda m: sum(m.hours))
     plt.subplot(221)
     msgs = [sum(m.hours) for m in members]
     barlst = plt.barh(range(len(members)), msgs, align='center', height=0.4)
-    # Set bar colors
+    # set bar colors
     for i in range(len(barlst)):
         barlst[i].set_color(colors[i])
     plt.xlim([0, max(msgs)*1.15])
     plt.yticks(range(len(members)), [m.name for m in members], size='small')
-    # Annotate bars
+    # annotate bars with exakt value
     for i in range(len(members)):
         plt.text(msgs[i]+max(msgs)*0.02, i, str(msgs[i]), ha='left', va='center')
-    # Label plot and axes
     plt.title('Total Messages Sent during %d Days' % period)
 
-    # Total message count for each member as pie chart
+    # total message count for each member as pie chart
     m_pie = plt.subplot(222)
-    # Explode max
+    # explode max
     explode = tuple([0.1 if sum(m.hours)==max(msgs) else 0 for m in members])
     plt.pie(msgs, explode=explode, labels=[' ' for m in members], colors=colors, autopct='%1.1f%%', startangle=90)
     plt.axis('equal')
     plt.title('Total Messages Sent as Share')
-    # Configure legend
+    # configure legend
     handles, labels = m_pie.get_legend_handles_labels()
     plt.legend(handles[::-1], [m.name for m in members][::-1], loc='center', bbox_to_anchor=(0.95, 0.5))
 
-    # Words per message for each member as bar graph
+    # words per message for each member as bar graph
     plt.subplot(223)
     wc_avg = [m.wc / float(sum(m.hours)) for m in members]
     barlst = plt.barh(range(len(members)), wc_avg, align='center', height=0.4)
-    # Set bar colors
+    # set bar colors
     for i in range(len(barlst)):
         barlst[i].set_color(colors[i])
     plt.xlim([0, max(wc_avg)*1.15])
     plt.yticks(range(len(members)), [m.name for m in members], size='small')
-    # Annotate bars
+    # annotate bars exact value
     for i in range(len(members)):
         plt.text(wc_avg[i]+max(wc_avg)*0.02, i, str(round(wc_avg[i], 3)), ha='left', va='center')
     plt.title('Average Words per Message')
 
-    # Total word count for each member as pie chart
+    # total word count for each member as pie chart
     w_pie = plt.subplot(224)
-    # Explode max
+    # explode max
     wc_total = [m.wc for m in members]
     explode = tuple([0.1 if m.wc==max(wc_total) else 0 for m in members])
     plt.pie(wc_total, explode=explode, labels=[' ' for m in members], colors=colors, autopct='%1.1f%%', startangle=90)
     plt.axis('equal')
     plt.title('Total Words Written as Share')
-    # Configure legend
+    # configure legend
     handles, labels = w_pie.get_legend_handles_labels()
     plt.legend(handles[::-1], [m.name for m in members][::-1], loc='center', bbox_to_anchor=(0.95, 0.5))
 
-    # Show plots
+    # show plots
     plt.show()
 
 
@@ -208,7 +223,7 @@ def main():
     members, days = process(FILE)
     period = len(days)
     plot_general(members, days, period)
-    #plot_user_spec(members, period)
+    #plot_users(members, period)
 
 
 main()

@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
+import sys
 import random
 import numpy as np
 import matplotlib.pyplot as plt, matplotlib.colors as clrs, matplotlib.dates as mdts
@@ -8,8 +6,9 @@ import datetime as dt
 
 from scipy.interpolate import interp1d
 
+
 # exported chat file
-FILE = 'chat.txt'
+FILE = sys.argv[1] if len(sys.argv) > 1 else 'chat.txt'
 # colors used when plotting user specific information
 SPEC_THEME = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
 # colors used when plotting general information
@@ -42,65 +41,96 @@ class Member:
             self.wc += 1
 
 
-def string_to_date(s):
-    """Converts string of the format dd.mm.yy to a datetime object"""
-    return dt.date(2000+int(s[6:8]), int(s[3:5]), int(s[:2]))
+class Chat:
+    """Represents the Chat data"""
 
+    def __init__(self, path):
+        """Initializes object and reads the chat file"""
+        print('Reading %s ... ' % path, end='')
+        chfile = open(path, 'r')
+        self.chat = chfile.readlines()
+        chfile.close()
+        print('DONE')
 
-def date_diff(msg1, msg2):
-    """Calculates number of days that lie between two given messages"""
-    return (string_to_date(msg2) - string_to_date(msg1)).days
+    @staticmethod
+    def str_to_date(s):
+        """Converts string of the format dd.mm.yy to a datetime object"""
+        return dt.date(2000+int(s[6:8]), int(s[3:5]), int(s[:2]))
 
+    @staticmethod
+    def date_diff(msg1, msg2):
+        """Calculates number of days that lie between two given messages"""
+        return (Chat.str_to_date(msg2) - Chat.str_to_date(msg1)).days
 
-def rm_newline_chars(chat):
-    """Removes newline chars from messages"""
-    res = []
-    prev = None
-    for line in chat:
+    def _rm_newlines(self):
+        """Removes newline chars from messages"""
+        res = []
+        prev = None
+        for line in self.chat:
+            try:
+                int(line[:2])
+                int(line[3:5])
+                int(line[6:8])
+                if not (line[2] == line[5] == '.') or line[8] != ',':
+                    raise ValueError
+                if prev: res.append(prev)
+                prev = line
+            except ValueError:
+                prev = prev[:-1] + ' ' + line
+        res.append(prev)
+        self.chat = res
+
+    def _convert(self):
+        """Converts message format to the english format"""
+        print('Converting to english format ... ', end='')
         try:
-            int(line[:2])
-            int(line[3:5])
-            int(line[6:8])
-            if not (line[2] == line[5] == '.') or line[8] != ',':
-                raise ValueError
-            if prev: res.append(prev)
-            prev = line
+            int(self.chat[0][16:18])
         except ValueError:
-            prev = prev[:-1] + ' ' + line
-    res.append(prev)
-    return res
+            for i in range(len(self.chat)):
+                line = self.chat[i]
+                date = line[:10]
+                line = line[10:]
+                time = line[:line.index('.')]
+                line = line[line.index('-')+1:]
+                time, vrna = time.split()
+                # convert time
+                hour = int(time[:time.index(':')])
+                hour = 0 if hour == 12 else hour
+                minute = time[-3:]
+                time = (format(hour, '02') if vrna == 'vorm' else str(hour+12)) + minute + ':00:'
+                self.chat[i] = date + time + line
+        finally:
+            print('DONE')
 
-
-def process(chat):
-    """Reads chat file and prepares data for plotting"""
-    data = open(chat, 'r')
-    chat = data.readlines()
-    data.close()
-    # remove newline chars from messages
-    chat = rm_newline_chars(chat)
-    # initialize vars
-    members = []
-    first = chat[0]
-    period = date_diff(first, chat[-1]) + 1
-    days = [0 for _ in range(period)]
-    # process messages
-    for line in chat:
-        try:
-            date = line[:8]
-            hour = int(line[10:12])
-            line = line[20:]
-            name = line[:line.index(':')]
-            line = line[line.index(': ') + 2:]
-        except ValueError:
-            pass  # ignore corrupted messages
-        else:
-            days[date_diff(first, date)] += 1
-            if all(member.name != name for member in members):
-                members.append(Member(name, string_to_date(date)))
-            for member in members:
-                if member.name == name:
-                    member.add_message(line, hour)
-    return members, days
+    def process(self):
+        """Orders and prepares data for plotting"""
+        self._rm_newlines()
+        self._convert()
+        # initialize vars
+        members = []
+        first = self.chat[0]
+        period = Chat.date_diff(first, self.chat[-1]) + 1
+        days = [0 for _ in range(period)]
+        # process messages
+        print('Preparing data for plotting ... ', end='')
+        for line in self.chat:
+            try:
+                date = line[:8]
+                hour = int(line[10:12])
+                line = line[20:]
+                name = line[:line.index(':')]
+                line = line[line.index(': ') + 2:]
+            except ValueError:
+                pass  # ignore corrupted messages
+            else:
+                days[Chat.date_diff(first, date)] += 1
+                if all(member.name != name for member in members):
+                    members.append(Member(name, Chat.str_to_date(date)))
+                for member in members:
+                    if member.name == name:
+                        member.add_message(line, hour)
+        print('DONE')
+        return members, days
 
 
 def plot_general(members, days, period):
@@ -221,7 +251,7 @@ def plot_users(members, period):
     plt.yticks(range(len(members)), [m.name for m in members], size='small')
     # annotate bars exact value
     for i in range(len(members)):
-        plt.text(wc_avg[i]+max(wc_avg)*0.02, i, str(round(wc_avg[i], 3)), ha='left', va='center')
+        plt.text(wc_avg[i]+max(wc_avg)*0.02, i, format(wc_avg[i], '.3f'), ha='left', va='center')
     plt.title('Average Words per Message')
 
     # total word count for each member as pie chart
@@ -240,13 +270,10 @@ def plot_users(members, period):
     plt.show()
 
 
-def main():
-    """Main function"""
-    members, days = process(FILE)
+if __name__ == '__main__':
+    chat = Chat(FILE)
+    members, days = chat.process()
     period = len(days)
     plot_general(members, days, period)
     plot_users(members, period)
-
-
-main()
 

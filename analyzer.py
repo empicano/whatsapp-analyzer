@@ -8,7 +8,8 @@ import datetime as dt
 
 from scipy.interpolate import interp1d
 
-FILE = 'data/_chat_2017.txt'
+# exported chat file
+FILE = 'chat.txt'
 # colors used when plotting user specific information
 SPEC_THEME = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
 # colors used when plotting general information
@@ -20,7 +21,7 @@ class Member:
 
     def __init__(self, name, first):
         """Initializes object and sets variables to default values"""
-        self.name = name  # no support for phone numbers
+        self.name = name
         self.wc = 0  # word count
         self.words = {}
         self.hours = [0 for _ in range(24)]  # number of messages written in that hour
@@ -51,11 +52,32 @@ def date_diff(msg1, msg2):
     return (string_to_date(msg2) - string_to_date(msg1)).days
 
 
+def rm_newline_chars(chat):
+    """Removes newline chars from messages"""
+    res = []
+    prev = None
+    for line in chat:
+        try:
+            int(line[:2])
+            int(line[3:5])
+            int(line[6:8])
+            if not (line[2] == line[5] == '.') or line[8] != ',':
+                raise ValueError
+            if prev: res.append(prev)
+            prev = line
+        except ValueError:
+            prev = prev[:-1] + ' ' + line
+    res.append(prev)
+    return res
+
+
 def process(chat):
     """Reads chat file and prepares data for plotting"""
     data = open(chat, 'r')
     chat = data.readlines()
     data.close()
+    # remove newline chars from messages
+    chat = rm_newline_chars(chat)
     # initialize vars
     members = []
     first = chat[0]
@@ -108,8 +130,8 @@ def plot_general(members, days, period):
     plt.plot(dates, days, GNRL_THEME[0])
     plt.ylim([0, max(days)*1.1])
     plt.gca().yaxis.grid(True)
-    plt.legend(['On specific Day', 'On Average in specific Month'], loc=2)
-    plt.title('Messages Sent')
+    plt.legend(['Total Number on specific Day', 'Average in that Month'], loc=2)
+    plt.title('Messages per Day')
     plt.ylabel('#Messages')
     # annotate maxima
     mxma = []
@@ -147,7 +169,7 @@ def plot_general(members, days, period):
     plt.scatter(range(24), y, color=GNRL_THEME[3])
     # annotate points with initials
     for i in range(24):
-        plt.annotate(lbs[i], xy=(i, y[i]), xytext=(5, 5), textcoords='offset points')
+        plt.annotate(lbs[i], xy=(i, y[i]), xytext=(0, 10), textcoords='offset points')
     plt.legend(['All Users Together', 'Most Active User in that Hour'], loc=2)
 
     # show plots
@@ -223,7 +245,7 @@ def main():
     members, days = process(FILE)
     period = len(days)
     plot_general(members, days, period)
-    #plot_users(members, period)
+    plot_users(members, period)
 
 
 main()

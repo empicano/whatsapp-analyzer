@@ -89,7 +89,7 @@ def process(chat):
             date = line[:8]
             hour = int(line[10:12])
             line = line[20:]
-            name = line[:line.index(':')].decode('utf-8')
+            name = line[:line.index(':')]
             line = line[line.index(': ') + 2:]
         except ValueError:
             pass  # ignore corrupted messages
@@ -114,12 +114,12 @@ def plot_general(members, days, period):
     # set up date xlables
     dates = [min(m.first for m in members) + dt.timedelta(days=i) for i in range(period)]
     plt.gca().xaxis.set_major_formatter(mdts.DateFormatter('%b %Y'))
-    plt.gca().xaxis.set_major_locator(mdts.MonthLocator(interval=(period / 300) or 1))
+    plt.gca().xaxis.set_major_locator(mdts.MonthLocator(interval=(period // 300) or 1))
     # convert from daily message count to monthly average
     first = min(m.first for m in members)
     start = first if first.day==1 else first.replace(day=1, month=first.month+1)
     m_diff = ((first + dt.timedelta(days=period)).year - start.year) * 12 + (first + dt.timedelta(days=period)).month - start.month
-    idxs = [(start.replace(month=(start.month+i) % 12 + 1, year=start.year + ((start.month+i) / 12)) - first).days for i in range(0, m_diff)]
+    idxs = [(start.replace(month=(start.month+i) % 12 + 1, year=start.year + ((start.month+i) // 12)) - first).days for i in range(0, m_diff)]
     idxs.insert(0, (start-first).days)
     x = [dates[i] for i in idxs[:-1]]
     months = [np.mean(days[idxs[i]:idxs[i+1]]) for i in range(len(idxs)-1)]
@@ -145,7 +145,7 @@ def plot_general(members, days, period):
 
     # plot overall message count average per hour of the day
     x = np.linspace(0, 23, num=128, endpoint=True)
-    y = [e / float(period) for e in [sum([m.hours[i] for m in members]) for i in range(24)]]
+    y = [e / period for e in [sum([m.hours[i] for m in members]) for i in range(24)]]
     # cubic interpolate
     f = interp1d([i for i in range(24)], y, kind='cubic')
     plt.subplot(212)
@@ -164,7 +164,7 @@ def plot_general(members, days, period):
             if m.hours[i] > mx_m:
                 mx_m = m.hours[i]
                 mx_l = m.name.split()[0][:1] + '.' + m.name.split()[1][:1] + '.'
-        y.append(mx_m / float(period))
+        y.append(mx_m / period)
         lbs.append(mx_l)
     plt.scatter(range(24), y, color=GNRL_THEME[3])
     # annotate points with initials
@@ -212,7 +212,7 @@ def plot_users(members, period):
 
     # words per message for each member as bar graph
     plt.subplot(223)
-    wc_avg = [m.wc / float(sum(m.hours)) for m in members]
+    wc_avg = [m.wc / sum(m.hours) for m in members]
     barlst = plt.barh(range(len(members)), wc_avg, align='center', height=0.4)
     # set bar colors
     for i in range(len(barlst)):

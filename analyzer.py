@@ -8,7 +8,7 @@ from scipy.interpolate import interp1d
 
 
 # exported chat file
-FILE = sys.argv[1] if len(sys.argv) > 1 else 'chat.txt'
+FILE = sys.argv[1] if len(sys.argv) > 1 else '_chat.txt'
 # colors used when plotting user specific information
 SPEC_THEME = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
 # colors used when plotting general information
@@ -43,6 +43,65 @@ class Member:
             self.wc += 1
 
 
+class Format:
+    """Bundles Functions checking for and converting between different chat formats"""
+
+    @staticmethod
+    def lang(msg):
+        """Returns chat format of message as string"""
+        try:
+            if len(msg) > 20 and msg[2] == msg[5] == '.' and msg[8:10] == ', ':
+                int(msg[:2])
+                if msg[12] == msg[15] == msg[18] == ':':
+                    return 'uk'
+                int(msg[10])
+                int(msg[13])
+                return 'ger'
+            if len(msg) > 20 and msg[0] == '[':
+                int(msg[1:3])
+                int(msg[4:6])
+                if msg[3] == msg[6] == '.':
+                    if msg[9] == ',' and msg[13] == msg[16] == ':' and msg[19] == ']':
+                        return 'us'
+                    if msg[14] == msg[17] == ':' or msg[15] == msg[18] == ':':
+                        return 'rus'
+                if msg[14] == msg[17] == ':' and msg[20] == ']' and msg[3] == msg[6] == '/':
+                    return 'fr'
+        except ValueError:
+            pass
+
+    @staticmethod
+    def convert(msg):
+        """Converts message to uk english format"""
+        lang = Format.lang(msg)
+        if lang == 'ger':
+            # convert from german format
+            date = msg[:10]
+            msg = msg[10:]
+            time = msg[:msg.index('.')]
+            msg = msg[msg.index('-')+1:]
+            time, vrna = time.split()
+            # convert time
+            hour = int(time[:time.index(':')])
+            hour = 0 if hour == 12 else hour
+            minute = time[-3:]
+            time = (format(hour, '02') if vrna == 'vorm' else str(hour+12)) + minute + ':00:'
+            return date + time + msg
+        if lang == 'us':
+            # convert from us format
+            return msg[1:19] + ':' + msg[20:]
+        if lang == 'fr':
+            # convert from french format
+            return msg[1:3] + '.' + msg[4:6] + '.' + msg[9:11] + ',' + msg[11:20] + ':' + msg[21:]
+        if lang == 'rus':
+            # convert from russian format
+            if msg.index(']') == 21:
+                return msg[1:7] + msg[9:21] + ':' + msg[22:]
+            else:
+                return msg[1:7] + msg[9:13] + '0' + msg[13:20] + ':' + msg[21:]
+        return msg
+
+
 class Chat:
     """Represents the Chat data"""
 
@@ -64,51 +123,30 @@ class Chat:
         """Calculates number of days that lie between two given messages"""
         return (Chat.str_to_date(msg2) - Chat.str_to_date(msg1)).days
 
-    def _rm_newlines(self):
+    def rm_newlines(self):
         """Removes newline chars from messages"""
         res = []
         prev = None
         for line in self.chat:
-            try:
-                int(line[:2])
-                int(line[3:5])
-                int(line[6:8])
-                if not (line[2] == line[5] == '.') or line[8] != ',':
-                    raise ValueError
+            if Format.lang(line):
                 if prev: res.append(prev)
                 prev = line
-            except ValueError:
+            else:
                 prev = prev[:-1] + ' ' + line
         res.append(prev)
         self.chat = res
 
-    def _convert(self):
-        """Converts message format to the english format"""
+    def convert(self):
+        """Converts message format to the uk english format"""
         print('Converting to english format ... ', end='')
-        try:
-            int(self.chat[0][16:18])
-        except ValueError:
-            # convert from german to english format
-            for i in range(len(self.chat)):
-                line = self.chat[i]
-                date = line[:10]
-                line = line[10:]
-                time = line[:line.index('.')]
-                line = line[line.index('-')+1:]
-                time, vrna = time.split()
-                # convert time
-                hour = int(time[:time.index(':')])
-                hour = 0 if hour == 12 else hour
-                minute = time[-3:]
-                time = (format(hour, '02') if vrna == 'vorm' else str(hour+12)) + minute + ':00:'
-                self.chat[i] = date + time + line
-        finally:
-            print('DONE')
+        for i in range(len(self.chat)):
+            self.chat[i] = Format.convert(self.chat[i])
+        print('DONE')
 
     def process(self):
         """Orders and prepares data for plotting"""
-        self._rm_newlines()
-        self._convert()
+        self.rm_newlines()
+        self.convert()
         # initialize vars
         members = []
         first = self.chat[0]
@@ -210,7 +248,7 @@ def plot_users(members):
     # set window title
     plt.figure().canvas.set_window_title('Whatsapp Analyzer')
     # set colors
-    colors = SPEC_THEME[:len(members)] if len(members) <= len(SPEC_THEME) else random.sample(clrs.cnames, len(members))
+    colors = SPEC_THEME[:len(members)] if len(members) <= len(SPEC_THEME) else random.sample(list(clrs.cnames), len(members))
     period = max([len(m.days) for m in members])
 
     # total message count for each member as bar graph

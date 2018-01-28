@@ -1,6 +1,6 @@
 # Introduction
 
-Whatsapp-Analyzer is a statistical analysis tool for Whatsapp chats. Using Matplotlib, it generates various plots showing, for example, the average number of words the chat participants write per message. For the analysis it works on chat files, which can be exported from Whatsapp. These are some the plots it produces when analyzing a group chat of mine:
+Whatsapp-Analyzer is a statistical analysis tool for Whatsapp chats. Using Matplotlib, it generates various plots showing, for example, the average number of words chat participants write per message. For the analysis it works on the chat files that can be exported from Whatsapp. Below you can see a selection of plots it produces when analyzing a group chat of mine:
 
 ![example](example.png)
 
@@ -21,17 +21,20 @@ To get started, you need to export a chat to your computer. To do that, open Wha
 
 The (date/time/media) format in the exported text file is different for some app languages. The program currently supports the formats of following languages:
 
-- English
+- English (U.K.)
+- English (U.S.)
 - German
+- French
+- Russian
 
-If your language is not listed, feel free to raise an issue containing an example chat in your language format. If you want to convert it yourself, use the following format:
+If your language is not listed, you can raise an issue or convert it yourself, using the following format:
 
 ```
 dd.mm.yy, hh:mm:ss: Rose Marie: Darling! Its been an age! Tell me, how are you?
 24.01.18, 09:03:56: Mary Jane: Simply splendid. Look, i purchased a new estate: <image omitted>
 ```
 
-The program expects a file named **chat.txt** in the same directory. Alternatively you can hand over a file path as command line argument. Run `python3 analyzer.py [file path]` in your terminal to start the analysis.
+The program expects a file named **_chat.txt** in the same directory. Alternatively you can hand over a file path as command line argument. Run `python3 analyzer.py [file path]` in your terminal to start the analysis.
 
 ### Needed Dependencies
 

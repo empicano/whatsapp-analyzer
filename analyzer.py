@@ -12,23 +12,25 @@ FILE = sys.argv[1] if len(sys.argv) > 1 else 'chat.txt'
 # colors used when plotting user specific information
 SPEC_THEME = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
 # colors used when plotting general information
-GNRL_THEME = ['#14325c', '#c9c9c9', '#5398d9', '#ff0000']
+GNRL_THEME = ['#14325c', '#c9c9c9', '#5398d9', '#ff0000', '#00ff00']
 
 
 class Member:
-    """Represents one chat participator"""
+    """Represents chat participator"""
 
-    def __init__(self, name, first):
+    def __init__(self, name, first, period):
         """Initializes object and sets variables to default values"""
         self.name = name
         self.wc = 0  # word count
         self.words = {}
-        self.hours = [0 for _ in range(24)]  # number of messages written in that hour
+        self.hours = [[0 for _ in range(24)] for _ in range(7)]  # messages in hour at weekday
+        self.days = [0 for _ in range(period)]  # messages mapped on days
         self.first = first  # date of first message
 
-    def add_message(self, message, hour):
+    def add_message(self, message, day, weekday, hour):
         """Adds message data to the user object"""
-        self.hours[hour] += 1
+        self.hours[weekday][hour] += 1
+        self.days[day] += 1
         # clear words of dots, quotation marks etc.
         for word in message.split():
             word = word.lower()
@@ -86,6 +88,7 @@ class Chat:
         try:
             int(self.chat[0][16:18])
         except ValueError:
+            # convert from german to english format
             for i in range(len(self.chat)):
                 line = self.chat[i]
                 date = line[:10]
@@ -110,7 +113,6 @@ class Chat:
         members = []
         first = self.chat[0]
         period = Chat.date_diff(first, self.chat[-1]) + 1
-        days = [0 for _ in range(period)]
         # process messages
         print('Preparing data for plotting ... ', end='')
         for line in self.chat:
@@ -123,21 +125,22 @@ class Chat:
             except ValueError:
                 pass  # ignore corrupted messages
             else:
-                days[Chat.date_diff(first, date)] += 1
                 if all(member.name != name for member in members):
-                    members.append(Member(name, Chat.str_to_date(date)))
+                    members.append(Member(name, Chat.str_to_date(date), period))
                 for member in members:
                     if member.name == name:
-                        member.add_message(line, hour)
+                        member.add_message(line, Chat.date_diff(first, date), Chat.str_to_date(date).weekday(), hour)
         print('DONE')
-        return members, days
+        return members
 
 
-def plot_general(members, days, period):
+def plot_general(members):
     """Visualizes data concerning all users"""
 
     # set window title
     plt.figure().canvas.set_window_title('Whatsapp Analyzer')
+    period = max([len(m.days) for m in members])
+    days = [sum([m.days[i] for m in members]) for i in range(period)]
 
     # plot monthly average of messages per day
     plt.subplot(211)
@@ -170,54 +173,50 @@ def plot_general(members, days, period):
         mxma.append((dates[days.index(max(cp))], max(cp)))
         cp.remove(max(cp))
     for mxm in mxma:
-        plt.annotate(mxm[0].strftime('%a, %d.%m.%Y'), xy=mxm,
-                     xytext=(30, 0), textcoords='offset points', verticalalignment='center', arrowprops=dict(arrowstyle='->'))
+        lbl = mxm[0].strftime('%a, %d.%m.%Y')
+        plt.annotate(lbl, xy=mxm, xytext=(30, 0), textcoords='offset points', va='center', arrowprops=dict(arrowstyle='->'))
 
     # plot overall message count average per hour of the day
     x = np.linspace(0, 23, num=128, endpoint=True)
-    y = [e / period for e in [sum([m.hours[i] for m in members]) for i in range(24)]]
+    overall = [e / period for e in [sum([sum([m.hours[i][j] for i in range(7)]) for m in members]) for j in range(24)]]
+    # get midweek (mon, tue, wen, thu) and weekend (fri, sat, sun) hours
+    midweek = [e / (period*4/7) for e in [sum([sum([m.hours[i][j] for i in range(4)]) for m in members]) for j in range(24)]]
+    weekend = [e / (period*3/7) for e in [sum([sum([m.hours[i][j] for i in range(4, 7)]) for m in members]) for j in range(24)]]
     # cubic interpolate
-    f = interp1d([i for i in range(24)], y, kind='cubic')
+    f = interp1d([i for i in range(24)], overall, kind='cubic')
+    g = interp1d([i for i in range(24)], midweek, kind='cubic')
+    h = interp1d([i for i in range(24)], weekend, kind='cubic')
+    # plot
     plt.subplot(212)
-    plt.plot(x, f(x), GNRL_THEME[2])
+    plt.plot(x, f(x), GNRL_THEME[2], ls='-', lw=1.5)
+    plt.plot(x, g(x), GNRL_THEME[3], ls='--', lw=1.5)
+    plt.plot(x, h(x), GNRL_THEME[4], ls='--', lw=1.5)
+    # ticks, grid, labels
     plt.xticks(np.arange(min(x), max(x)+1, 2.0))
+    plt.xlim([-1, 24])
     plt.grid()
     plt.title('Average Messages per Hour')
     plt.xlabel('Hour of the Day')
     plt.ylabel('#Messages')
-
-    # plot average number of messages of most active user in that hour
-    y, lbs = [], []
-    for i in range(24):
-        mx_l, mx_m = '', -1
-        for m in members:
-            if m.hours[i] > mx_m:
-                mx_m = m.hours[i]
-                mx_l = m.name.split()[0][:1] + '.' + m.name.split()[1][:1] + '.'
-        y.append(mx_m / period)
-        lbs.append(mx_l)
-    plt.scatter(range(24), y, color=GNRL_THEME[3])
-    # annotate points with initials
-    for i in range(24):
-        plt.annotate(lbs[i], xy=(i, y[i]), xytext=(0, 10), textcoords='offset points')
-    plt.legend(['All Users Together', 'Most Active User in that Hour'], loc=2)
+    plt.legend(['Overall', 'Midweek [Mo,Tu,We,Th]', 'Weekend [Fr,Sa,Su]'], loc=2)
 
     # show plots
     plt.show()
 
 
-def plot_users(members, period):
+def plot_users(members):
     """Visualizes data concerning specific users"""
 
     # set window title
     plt.figure().canvas.set_window_title('Whatsapp Analyzer')
     # set colors
     colors = SPEC_THEME[:len(members)] if len(members) <= len(SPEC_THEME) else random.sample(clrs.cnames, len(members))
+    period = max([len(m.days) for m in members])
 
     # total message count for each member as bar graph
-    members = sorted(members, key=lambda m: sum(m.hours))
+    members = sorted(members, key=lambda m: sum(m.days))
     plt.subplot(221)
-    msgs = [sum(m.hours) for m in members]
+    msgs = [sum(m.days) for m in members]
     barlst = plt.barh(range(len(members)), msgs, align='center', height=0.4)
     # set bar colors
     for i in range(len(barlst)):
@@ -232,7 +231,7 @@ def plot_users(members, period):
     # total message count for each member as pie chart
     m_pie = plt.subplot(222)
     # explode max
-    explode = tuple([0.1 if sum(m.hours)==max(msgs) else 0 for m in members])
+    explode = tuple([0.1 if sum(m.days)==max(msgs) else 0 for m in members])
     plt.pie(msgs, explode=explode, labels=[' ' for m in members], colors=colors, autopct='%1.1f%%', startangle=90)
     plt.axis('equal')
     plt.title('Total Messages Sent as Share')
@@ -242,7 +241,7 @@ def plot_users(members, period):
 
     # words per message for each member as bar graph
     plt.subplot(223)
-    wc_avg = [m.wc / sum(m.hours) for m in members]
+    wc_avg = [m.wc / sum(m.days) for m in members]
     barlst = plt.barh(range(len(members)), wc_avg, align='center', height=0.4)
     # set bar colors
     for i in range(len(barlst)):
@@ -272,8 +271,7 @@ def plot_users(members, period):
 
 if __name__ == '__main__':
     chat = Chat(FILE)
-    members, days = chat.process()
-    period = len(days)
-    plot_general(members, days, period)
-    plot_users(members, period)
+    members = chat.process()
+    plot_general(members)
+    plot_users(members)
 

@@ -9,10 +9,12 @@ from scipy.interpolate import interp1d
 
 # exported chat file
 FILE = sys.argv[1] if len(sys.argv) > 1 else '_chat.txt'
+# colors used when plotting message trend
+TRND_THEME = ['#14325c', '#c7c6c1']
+# colors used when plotting general user information
+GNRL_THEME = ['#c7c6c1', '#5398d9', '#ff0000', '#00ff00']
 # colors used when plotting user specific information
 SPEC_THEME = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
-# colors used when plotting general information
-GNRL_THEME = ['#14325c', '#c7c6c1', '#5398d9', '#ff0000', '#00ff00']
 
 
 class Member:
@@ -107,11 +109,11 @@ class Chat:
 
     def __init__(self, path):
         """Initializes object and reads the chat file"""
-        print('Reading %s ... ' % path, end='')
+        print('[ .. ] Reading %s' % path, end=''); sys.stdout.flush()
         chfile = open(path, 'r')
         self.chat = chfile.readlines()
         chfile.close()
-        print('DONE')
+        print('\r[ OK ] Reading %s' % path)
 
     @staticmethod
     def str_to_date(s):
@@ -123,7 +125,7 @@ class Chat:
         """Calculates number of days that lie between two given messages"""
         return (Chat.str_to_date(msg2) - Chat.str_to_date(msg1)).days
 
-    def rm_newlines(self):
+    def _rm_nl(self):
         """Removes newline chars from messages"""
         res = []
         prev = None
@@ -136,23 +138,23 @@ class Chat:
         res.append(prev)
         self.chat = res
 
-    def convert(self):
+    def _to_uk(self):
         """Converts message format to the uk english format"""
-        print('Converting to english format ... ', end='')
+        print('[ .. ] Converting to english format', end=''); sys.stdout.flush()
         for i in range(len(self.chat)):
             self.chat[i] = Format.convert(self.chat[i])
-        print('DONE')
+        print('\r[ OK ] Converting to english format')
 
     def process(self):
         """Orders and prepares data for plotting"""
-        self.rm_newlines()
-        self.convert()
+        self._rm_nl()
+        self._to_uk()
         # initialize vars
         members = []
         first = self.chat[0]
         period = Chat.date_diff(first, self.chat[-1]) + 1
         # process messages
-        print('Preparing data for plotting ... ', end='')
+        print('[ .. ] Preparing data for plotting', end=''); sys.stdout.flush()
         for line in self.chat:
             try:
                 date = line[:8]
@@ -168,20 +170,18 @@ class Chat:
                 for member in members:
                     if member.name == name:
                         member.add_message(line, Chat.date_diff(first, date), Chat.str_to_date(date).weekday(), hour)
-        print('DONE')
+        print('\r[ OK ] Preparing data for plotting')
         return members
 
 
-def plot_general(members):
-    """Visualizes data concerning all users"""
+def plot_msg_trend(members):
+    """Visualizes overall message trend"""
 
     # set window title
     plt.figure().canvas.set_window_title('Whatsapp Analyzer')
     period = max([len(m.days) for m in members])
     days = [sum([m.days[i] for m in members]) for i in range(period)]
 
-    # plot monthly average of messages per day
-    plt.subplot(211)
     # set up date xlables
     dates = [min(m.first for m in members) + dt.timedelta(days=i) for i in range(period)]
     plt.gca().xaxis.set_major_formatter(mdts.DateFormatter('%b %Y'))
@@ -194,11 +194,11 @@ def plot_general(members):
     idxs.insert(0, (start-first).days)
     x = [dates[i] for i in idxs[:-1]]
     months = [np.mean(days[idxs[i]:idxs[i+1]]) for i in range(len(idxs)-1)]
-    # plot bars
-    plt.bar(x, months, [idxs[i]-idxs[i-1] for i in range(1, len(idxs))], color=GNRL_THEME[1], align='edge')
+    # plot monthly average of messages per day
+    plt.bar(x, months, [idxs[i]-idxs[i-1] for i in range(1, len(idxs))], color=TRND_THEME[1], align='edge')
 
     # plot message count on all days
-    plt.plot(dates, days, GNRL_THEME[0])
+    plt.plot(dates, days, TRND_THEME[0])
     # limiters, legend, labels
     plt.ylim([0, max(days)*1.1])
     plt.xlim([dates[0]-dt.timedelta(days=len(days)*0.03), dates[len(days)-1]+dt.timedelta(days=len(days)*0.03)])
@@ -208,6 +208,7 @@ def plot_general(members):
     plt.legend(['Total Number on specific Day', 'Average in that Month'], loc=2)
     plt.title('Messages per Day', y=1.03, weight='bold')
     plt.ylabel('# Messages')
+
     # annotate maxima
     mxma = []
     cp = days[:]
@@ -218,7 +219,32 @@ def plot_general(members):
         lbl = mxm[0].strftime('%a, %d.%m.%Y')
         plt.annotate(lbl, xy=mxm, xytext=(30, 0), textcoords='offset points', va='center', arrowprops=dict(arrowstyle='->'))
 
-    # plot overall message count average per hour of the day
+    # show plots
+    plt.show()
+
+
+def plot_general(members):
+    """Visualizes data concerning all users"""
+
+    # set window title
+    plt.figure().canvas.set_window_title('Whatsapp Analyzer')
+    period = max([len(m.days) for m in members])
+
+    # plot message count average on specific day of the week
+    weekdays = [sum([sum(m.hours[i]) for m in members]) for i in range(7)]
+    plt.subplot(221)
+    plt.bar(range(7), weekdays, align='center', color=GNRL_THEME[0])
+    # limiters, xticks, labels
+    plt.xticks(range(7), ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
+    plt.ylim([0, max(weekdays)*1.1])
+    plt.gca().spines['top'].set_visible(False)
+    plt.gca().spines['right'].set_visible(False)
+    plt.gca().tick_params(top='off', right='off')
+    plt.gca().xaxis.grid(False)
+    plt.title('Average Messages per Weekday', y=1.03, weight='bold')
+    plt.ylabel('# Messages')
+
+    # plot message count average on specific hour of the day
     x = np.linspace(0, 23, num=128, endpoint=True)
     overall = [e / period for e in [sum([sum([m.hours[i][j] for i in range(7)]) for m in members]) for j in range(24)]]
     # get midweek (mon, tue, wen, thu) and weekend (fri, sat, sun) hours
@@ -230,17 +256,16 @@ def plot_general(members):
     h = interp1d([i for i in range(24)], weekend, kind='cubic')
     # plot
     plt.subplot(212)
-    plt.plot(x, f(x), GNRL_THEME[2], ls='-', lw=2)
-    plt.plot(x, g(x), GNRL_THEME[3], ls='--', lw=2)
-    plt.plot(x, h(x), GNRL_THEME[4], ls='--', lw=2)
-    # limiters, ticks, labels
+    plt.plot(x, f(x), GNRL_THEME[1], ls='-', lw=2)
+    plt.plot(x, g(x), GNRL_THEME[2], ls='--', lw=2)
+    plt.plot(x, h(x), GNRL_THEME[3], ls='--', lw=2)
+    # limiters, ticks, labels, legend
     plt.xticks(np.arange(min(x), max(x)+1, 1.0))
     plt.xlim([-1, 24])
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
     plt.gca().tick_params(top='off', right='off')
-    plt.title('Average Messages per Hour', y=1.03, weight='bold')
-    plt.xlabel('Hour of the Day')
+    plt.title('Average Messages per Hour of the Day', y=1.03, weight='bold')
     plt.ylabel('# Messages')
     plt.legend(['Overall', 'Midweek (Mo,Tu,We,Th)', 'Weekend (Fr,Sa,Su)'], loc=2)
 
@@ -331,6 +356,7 @@ if __name__ == '__main__':
     plt.rcParams['patch.linewidth'] = 0.4  # width of pie chart lines
     plt.rcParams['axes.edgecolor'] = 'black'
     # plot
+    plot_msg_trend(members)
     plot_general(members)
     plot_users(members)
 

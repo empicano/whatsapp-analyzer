@@ -131,12 +131,12 @@ def plot_msg_trend(members):
     x = [dates[i] for i in idxs[:-1]]
     months = [np.mean(days[idxs[i]:idxs[i+1]]) for i in range(len(idxs)-1)]
     # plot monthly average of messages per day
+    plt.subplot(211)
     plt.bar(x, months, [idxs[i]-idxs[i-1] for i in range(1, len(idxs))], color=TRND_THEME[1], align='edge')
 
     # plot message count on all days
     plt.plot(dates, days, TRND_THEME[0])
     # limiters, legend, labels
-    plt.ylim([0, max(days)*1.1])
     plt.xlim([dates[0]-dt.timedelta(days=len(days)*0.03), dates[len(days)-1]+dt.timedelta(days=len(days)*0.03)])
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
@@ -153,7 +153,7 @@ def plot_msg_trend(members):
         cp.remove(max(cp))
     for mxm in mxma:
         lbl = mxm[0].strftime('%a, %d.%m.%Y')
-        plt.annotate(lbl, xy=mxm, xytext=(30, 0), textcoords='offset points', va='center', arrowprops=dict(arrowstyle='->'))
+        plt.annotate(lbl, xy=mxm, xytext=(-10, -6), rotation=90, textcoords='offset points', size='small')
 
     # show plots
     plt.show()

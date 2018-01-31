@@ -164,10 +164,19 @@ def plot_general(members):
 
     # set window title
     plt.figure().canvas.set_window_title('Whatsapp Analyzer')
-    period = max([len(m.days) for m in members])
+    period = len(members[0].days)
 
     # plot message count average on specific day of the week
-    weekdays = [sum([sum(m.hours[i]) for m in members]) for i in range(7)]
+    wds = [sum([sum(m.hours[i]) for m in members]) for i in range(7)]
+    fst = min([m.first for m in members])
+    wd1 = fst.weekday()  # weekday of first message
+    wd2 = (fst + dt.timedelta(days=period-1)).weekday()  # weekday of last message
+    wdn = [(period - wd2 - 1) // 7 for _ in range(7)]
+    for i in range(7, (wd1 if wd1 else 7), -1):
+        wdn[i-1] += 1
+    for i in range(wd2+1):
+        wdn[i] += 1
+    weekdays = tuple(map(lambda e, a: e / a, wds, wdn))
     plt.subplot(221)
     plt.bar(range(7), weekdays, align='center', color=GNRL_THEME[0])
     # limiters, xticks, labels
@@ -187,9 +196,9 @@ def plot_general(members):
     midweek = [e / (period*4/7) for e in [sum([sum([m.hours[i][j] for i in range(4)]) for m in members]) for j in range(24)]]
     weekend = [e / (period*3/7) for e in [sum([sum([m.hours[i][j] for i in range(4, 7)]) for m in members]) for j in range(24)]]
     # cubic interpolate
-    f = interp1d([i for i in range(24)], overall, kind='cubic')
-    g = interp1d([i for i in range(24)], midweek, kind='cubic')
-    h = interp1d([i for i in range(24)], weekend, kind='cubic')
+    f = interp1d(range(24), overall, kind='cubic')
+    g = interp1d(range(24), midweek, kind='cubic')
+    h = interp1d(range(24), weekend, kind='cubic')
     # plot
     plt.subplot(212)
     plt.plot(x, f(x), GNRL_THEME[1], ls='-', lw=2)
@@ -217,7 +226,7 @@ def plot_users(members):
     plt.figure().canvas.set_window_title('Whatsapp Analyzer')
     # set colors
     colors = SPEC_THEME[:len(members)] if len(members) <= len(SPEC_THEME) else sample(list(clrs.cnames), len(members))
-    period = max([len(m.days) for m in members])
+    period = len(members[0].days)
 
     # total message count for each member as bar graph
     members = sorted(members, key=lambda m: sum(m.days))

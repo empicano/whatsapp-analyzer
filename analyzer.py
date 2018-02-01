@@ -113,11 +113,9 @@ class Chat:
 def plot_msg_trend(members):
     """Visualizes overall message trend"""
 
-    # set window title
-    plt.figure().canvas.set_window_title('Whatsapp Analyzer')
+    # set up data
     period = max([len(m.days) for m in members])
     days = [sum([m.days[i] for m in members]) for i in range(period)]
-
     # set up date xlables
     dates = [min(m.first for m in members) + dt.timedelta(days=i) for i in range(period)]
     plt.gca().xaxis.set_major_formatter(mdts.DateFormatter('%b %Y'))
@@ -155,18 +153,12 @@ def plot_msg_trend(members):
         lbl = mxm[0].strftime('%a, %d.%m.%Y')
         plt.annotate(lbl, xy=mxm, xytext=(-10, -6), rotation=90, textcoords='offset points', size='small')
 
-    # show plots
-    plt.show()
-
 
 def plot_general(members):
     """Visualizes data concerning all users"""
 
-    # set window title
-    plt.figure().canvas.set_window_title('Whatsapp Analyzer')
-    period = len(members[0].days)
-
     # plot message count average on specific day of the week
+    period = len(members[0].days)
     wds = [sum([sum(m.hours[i]) for m in members]) for i in range(7)]
     fst = min([m.first for m in members])
     wd1 = fst.weekday()  # weekday of first message
@@ -213,17 +205,12 @@ def plot_general(members):
     plt.title('Average Messages per Hour of the Day', y=1.03, weight='bold')
     plt.ylabel('# Messages')
     plt.legend(['Overall', 'Midweek (Mo,Tu,We,Th)', 'Weekend (Fr,Sa,Su)'], loc=2)
-
-    # show plots
     plt.subplots_adjust(hspace=0.40)
-    plt.show()
 
 
 def plot_users(members):
     """Visualizes data concerning specific users"""
 
-    # set window title
-    plt.figure().canvas.set_window_title('Whatsapp Analyzer')
     # set colors
     colors = SPEC_THEME[:len(members)] if len(members) <= len(SPEC_THEME) else sample(list(clrs.cnames), len(members))
     period = len(members[0].days)
@@ -280,18 +267,37 @@ def plot_users(members):
     plt.pie(wc_total, explode=explode, labels=[' ' for m in members], colors=colors, autopct='%1.1f%%', startangle=90)
     plt.axis('equal')
     plt.title('Total Words Written as Share', y=1.03, weight='bold')
-    # configure legend
+    # configure legend, spacing
     handles, labels = w_pie.get_legend_handles_labels()
     plt.legend(handles[::-1], [m.name for m in members][::-1], loc='center', bbox_to_anchor=(0.95, 0.5))
-
-    # show plots
     plt.subplots_adjust(wspace=0, hspace=0.40)
-    plt.show()
+
+
+def key_event(e):
+    """Handles key events for scrolling through the plots"""
+    global curr_pos
+
+    if e.key == 'right':
+        curr_pos += 1
+    elif e.key == 'left':
+        curr_pos -= 1
+    else:
+        return
+
+    # plot next site
+    curr_pos = curr_pos % len(plots)
+    plt.clf()
+    plots[curr_pos](members)
+    fig.canvas.draw()
 
 
 if __name__ == '__main__':
+    # process data
     chat = Chat(FILE)
     members = chat.process()
+    # init key event handling vars
+    curr_pos = 0
+    plots = [plot_msg_trend, plot_general, plot_users]
     # set custom style
     plt.style.use('seaborn-whitegrid')
     plt.rcParams['xtick.major.pad'] = 10
@@ -300,8 +306,11 @@ if __name__ == '__main__':
     plt.rcParams['ytick.major.size'] = 5
     plt.rcParams['patch.linewidth'] = 0.4  # width of pie chart lines
     plt.rcParams['axes.edgecolor'] = 'black'
-    # plot
-    plot_msg_trend(members)
-    plot_general(members)
-    plot_users(members)
+    # prepare window
+    fig = plt.figure()
+    fig.canvas.set_window_title('Whatsapp Analyzer')
+    fig.canvas.mpl_connect('key_press_event', key_event)
+    plots[0](members)
+    # show
+    plt.show()
 

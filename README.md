@@ -10,7 +10,7 @@ Whatsapp-Analyzer is a statistical analysis tool for Whatsapp chats. Using Matpl
 - Average words per message for each user
 - Number of messages sent as share for each user
 - Words written as share for each user
-- Average number of messages in specific hour and weekday
+- Average number of messages in specific hour or weekday
 - Number of messages mapped on days
 
 # How to Use
@@ -25,7 +25,7 @@ dd.mm.yy, hh:mm:ss: Rose Marie: Darling! Its been an age! Tell me, how are you?
 24.01.18, 09:03:56: Mary Jane: Simply splendid. I purchased a new estate: <image omitted>
 ```
 
-Place your chat file named **_chat.txt** in the same directory as the analyzer. Alternatively you can hand over a file path as command line argument. Run `python3 analyzer.py [file path]` in your terminal to start the analysis.
+Place your chat file named **_chat.txt** in the same directory as the analyzer. Alternatively you can hand over a file path as command line argument. Run `python3 analyzer.py [file path]` in your terminal to start the analysis. You can switch between plots using the arrow keys.
 
 ### Needed Dependencies
 

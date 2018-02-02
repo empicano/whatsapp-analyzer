@@ -4,7 +4,7 @@ Whatsapp-Analyzer is a statistical analysis tool for Whatsapp chats. Using Matpl
 
 ![example](example.png)
 
-### List of Plots
+# List of Plots
 
 - Number of messages sent for each user
 - Average words per message for each user
@@ -17,7 +17,7 @@ Whatsapp-Analyzer is a statistical analysis tool for Whatsapp chats. Using Matpl
 
 To get started, you need to export the chat you want to analyze to your computer. To do that, open Whatsapp on your mobile phone and select the chat. Under **group / contact info** you will find the button **export chat** - choose **without media**.
 
-Whatsapp isn't consistent with the format of the exported files. Depending on the language set on your phone, the time, date and status message format will be different. This program expects the **U.K. English** format:
+Whatsapp is weirdly inconsistent with the format of exported files. Depending on OS and language, the time, date and status message format will be different. This program expects the following format:
 
 
 ```
@@ -25,18 +25,11 @@ dd.mm.yy, hh:mm:ss: Rose Marie: Darling! Its been an age! Tell me, how are you?
 24.01.18, 09:03:56: Mary Jane: Simply splendid. I purchased a new estate: <image omitted>
 ```
 
-Place your chat file named **_chat.txt** in the same directory as the analyzer. Alternatively you can hand over a file path as command line argument. Run `python3 analyzer.py [file path]` in your terminal to start the analysis. You can switch between plots using the arrow keys.
+Place your chat file named **_chat.txt** in the same directory as the analyzer. Alternatively you can hand over a file path as command line argument. Run `python3 analyzer.py [file path]` in your terminal to start the analysis. Switch between plots using the arrow keys.
 
-### Needed Dependencies
+# Needed Dependencies
 
 - [matplotlib](https://matplotlib.org)
 - [scipy](https://www.scipy.org)
 - [numpy](http://www.numpy.org)
-
-# Development
-
-Some of what's to come:
-
-- Most used words and most important words (tf-idf) for each user
-- Use of emojis and media for each user
 

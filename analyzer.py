@@ -1,7 +1,11 @@
 import sys
 import numpy as np
-import matplotlib.pyplot as plt, matplotlib.colors as clrs, matplotlib.dates as mdts
 import datetime as dt
+
+import matplotlib.pyplot as plt
+import matplotlib.colors as clrs
+import matplotlib.dates as mdts
+import matplotlib.lines as lns
 
 from random import sample
 from scipy.interpolate import interp1d
@@ -33,12 +37,12 @@ class Member:
         """Adds message data to the user object"""
         self.hours[weekday][hour] += 1
         self.days[day] += 1
-        # clear words of dots, quotation marks etc.
+        # strip words of dots, quotation marks etc.
         for word in message.split():
             word = word.lower()
             while len(word) > 1 and word[-1] in '-,."\'!?:)—':
                 word = word[:-1]
-            while len(word) > 1 and word[0] in ',."\'*(-—~':
+            while len(word) > 1 and word[0] in ',."\'*(-—~#':
                 word = word[1:]
             self.words.setdefault(word, 0)
             self.words[word] += 1
@@ -114,8 +118,8 @@ def plot_msg_trend(members):
     """Visualizes overall message trend"""
 
     # set up data
-    period = max([len(m.days) for m in members])
-    days = [sum([m.days[i] for m in members]) for i in range(period)]
+    period = len(members[0].days)
+    days = [sum(m.days[i] for m in members) for i in range(period)]
     # set up date xlables
     dates = [min(m.first for m in members) + dt.timedelta(days=i) for i in range(period)]
     plt.gca().xaxis.set_major_formatter(mdts.DateFormatter('%b %Y'))
@@ -124,8 +128,7 @@ def plot_msg_trend(members):
     first = min(m.first for m in members)
     start = first if first.day==1 else first.replace(day=1, month=first.month+1)
     m_diff = ((first + dt.timedelta(days=period)).year - start.year) * 12 + (first + dt.timedelta(days=period)).month - start.month
-    idxs = [(start.replace(month=(start.month+i) % 12 + 1, year=start.year + ((start.month+i) // 12)) - first).days for i in range(0, m_diff)]
-    idxs.insert(0, (start-first).days)
+    idxs = [(start-first).days] + [(start.replace(month=(start.month+i) % 12 + 1, year=start.year + ((start.month+i) // 12)) - first).days for i in range(0, m_diff)]
     x = [dates[i] for i in idxs[:-1]]
     months = [np.mean(days[idxs[i]:idxs[i+1]]) for i in range(len(idxs)-1)]
     # plot monthly average of messages per day
@@ -135,7 +138,7 @@ def plot_msg_trend(members):
     # plot message count on all days
     plt.plot(dates, days, TRND_THEME[0])
     # limiters, legend, labels
-    plt.xlim([dates[0]-dt.timedelta(days=len(days)*0.03), dates[len(days)-1]+dt.timedelta(days=len(days)*0.03)])
+    plt.xlim([dates[0]-dt.timedelta(days=period*0.03), dates[period-1]+dt.timedelta(days=period*0.03)])
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
     plt.gca().tick_params(top='off', right='off')
@@ -153,6 +156,34 @@ def plot_msg_trend(members):
         lbl = mxm[0].strftime('%a, %d.%m.%Y')
         plt.annotate(lbl, xy=mxm, xytext=(-10, -6), rotation=90, textcoords='offset points', size='small')
 
+    plt.subplot(212)
+    # set up same date xlables as before
+    plt.gca().xaxis.set_major_formatter(mdts.DateFormatter('%b %Y'))
+    plt.gca().xaxis.set_major_locator(mdts.MonthLocator(interval=(period // 300) or 1))
+    # get index of first and last message
+    for i in range(len(members)):
+        xm = 1
+        for j in range(period):
+            if members[i].days[j]:
+                xm = (j+period*0.03) / period
+                break
+        xn = 0
+        for j in range(period-1, -1, -1):
+            if members[i].days[j]:
+                xn = (j-period*0.03) / period
+                break
+        # plot activity line
+        plt.axhline(y=i, xmin=xm, xmax=xn, linewidth=10, color=SPEC_THEME[i])
+    # limiters, legend, labels
+    plt.gca().spines['top'].set_visible(False)
+    plt.gca().spines['right'].set_visible(False)
+    plt.gca().tick_params(top='off', right='off')
+    plt.gca().yaxis.grid(False)
+    plt.gca().set_yticklabels([''] + [m.name for m in members])
+    plt.xlim([dates[0]-dt.timedelta(days=period*0.03), dates[period-1]+dt.timedelta(days=period*0.03)])
+    plt.ylim([-1, len(members)])
+    plt.title('Activity Period', y=1.03, weight='bold')
+    plt.subplots_adjust(wspace=0.20, hspace=0.40)
 
 def plot_general(members):
     """Visualizes data concerning all users"""
@@ -183,10 +214,10 @@ def plot_general(members):
 
     # plot message count average on specific hour of the day
     x = np.linspace(0, 23, num=128, endpoint=True)
-    overall = [e / period for e in [sum([sum([m.hours[i][j] for i in range(7)]) for m in members]) for j in range(24)]]
+    overall = [e / period for e in (sum((sum((m.hours[i][j] for i in range(7))) for m in members)) for j in range(24))]
     # get midweek (mon, tue, wen, thu) and weekend (fri, sat, sun) hours
-    midweek = [e / (period*4/7) for e in [sum([sum([m.hours[i][j] for i in range(4)]) for m in members]) for j in range(24)]]
-    weekend = [e / (period*3/7) for e in [sum([sum([m.hours[i][j] for i in range(4, 7)]) for m in members]) for j in range(24)]]
+    midweek = [e / (period*4/7) for e in (sum((sum((m.hours[i][j] for i in range(4))) for m in members)) for j in range(24))]
+    weekend = [e / (period*3/7) for e in (sum((sum((m.hours[i][j] for i in range(4, 7))) for m in members)) for j in range(24))]
     # cubic interpolate
     f = interp1d(range(24), overall, kind='cubic')
     g = interp1d(range(24), midweek, kind='cubic')
@@ -205,26 +236,22 @@ def plot_general(members):
     plt.title('Average Messages per Hour of the Day', y=1.03, weight='bold')
     plt.ylabel('# Messages')
     plt.legend(['Overall', 'Midweek (Mo,Tu,We,Th)', 'Weekend (Fr,Sa,Su)'], loc=2)
-    plt.subplots_adjust(hspace=0.40)
+    plt.subplots_adjust(wspace=0.20, hspace=0.40)
 
 
 def plot_users(members):
     """Visualizes data concerning specific users"""
 
-    # set colors
-    colors = SPEC_THEME[:len(members)] if len(members) <= len(SPEC_THEME) else sample(list(clrs.cnames), len(members))
-    period = len(members[0].days)
-
     # total message count for each member as bar graph
-    members = sorted(members, key=lambda m: sum(m.days))
     plt.subplot(221)
+    period = len(members[0].days)
     msgs = [sum(m.days) for m in members]
     barlst = plt.barh(range(len(members)), msgs, align='center', height=0.5)
     # set bar colors
     for i in range(len(barlst)):
-        barlst[i].set_color(colors[i])
+        barlst[i].set_color(SPEC_THEME[i])
     plt.xlim([0, max(msgs)*1.15])
-    plt.yticks(range(len(members)), [m.name for m in members])
+    plt.yticks(range(len(members)), (m.name for m in members))
     plt.gca().yaxis.grid(False)
     plt.gca().tick_params(top='off', right='off')
     # annotate bars with exakt value
@@ -235,13 +262,13 @@ def plot_users(members):
     # total message count for each member as pie chart
     m_pie = plt.subplot(222)
     # explode max
-    explode = tuple([0.1 if sum(m.days)==max(msgs) else 0 for m in members])
-    plt.pie(msgs, explode=explode, labels=[' ' for m in members], colors=colors, autopct='%1.1f%%', startangle=90)
+    explode = tuple(0.1 if sum(m.days)==max(msgs) else 0 for m in members)
+    plt.pie(msgs, explode=explode, labels=[' ' for m in members], colors=SPEC_THEME, autopct='%1.1f%%', startangle=90)
     plt.axis('equal')
     plt.title('Total Messages Sent as Share', y=1.03, weight='bold')
     # configure legend
     handles, labels = m_pie.get_legend_handles_labels()
-    plt.legend(handles[::-1], [m.name for m in members][::-1], loc='center', bbox_to_anchor=(0.95, 0.5))
+    plt.legend(handles[::-1], (m.name for m in members[::-1]), loc='center', bbox_to_anchor=(0.95, 0.5))
 
     # words per message for each member as bar graph
     plt.subplot(223)
@@ -249,9 +276,9 @@ def plot_users(members):
     barlst = plt.barh(range(len(members)), wc_avg, align='center', height=0.5)
     # set bar colors
     for i in range(len(barlst)):
-        barlst[i].set_color(colors[i])
+        barlst[i].set_color(SPEC_THEME[i])
     plt.xlim([0, max(wc_avg)*1.15])
-    plt.yticks(range(len(members)), [m.name for m in members])
+    plt.yticks(range(len(members)), (m.name for m in members))
     plt.gca().yaxis.grid(False)
     plt.gca().tick_params(top='off', right='off')
     # annotate bars exact value
@@ -263,13 +290,13 @@ def plot_users(members):
     w_pie = plt.subplot(224)
     # explode max
     wc_total = [m.wc for m in members]
-    explode = tuple([0.1 if m.wc==max(wc_total) else 0 for m in members])
-    plt.pie(wc_total, explode=explode, labels=[' ' for m in members], colors=colors, autopct='%1.1f%%', startangle=90)
+    explode = tuple(0.1 if m.wc==max(wc_total) else 0 for m in members)
+    plt.pie(wc_total, explode=explode, labels=[' ' for m in members], colors=SPEC_THEME, autopct='%1.1f%%', startangle=90)
     plt.axis('equal')
     plt.title('Total Words Written as Share', y=1.03, weight='bold')
     # configure legend, spacing
     handles, labels = w_pie.get_legend_handles_labels()
-    plt.legend(handles[::-1], [m.name for m in members][::-1], loc='center', bbox_to_anchor=(0.95, 0.5))
+    plt.legend(handles[::-1], (m.name for m in members[::-1]), loc='center', bbox_to_anchor=(0.95, 0.5))
     plt.subplots_adjust(wspace=0, hspace=0.40)
 
 
@@ -283,7 +310,6 @@ def key_event(e):
         curr_pos -= 1
     else:
         return
-
     # plot next site
     curr_pos = curr_pos % len(plots)
     plt.clf()
@@ -292,9 +318,9 @@ def key_event(e):
 
 
 if __name__ == '__main__':
-    # process data
     chat = Chat(FILE)
-    members = chat.process()
+    members = sorted(chat.process(), key=lambda m: sum(m.days))
+    SPEC_THEME = SPEC_THEME[len(SPEC_THEME)-len(members):] if len(members) <= len(SPEC_THEME) else sample(list(clrs.cnames), len(members))
     # init key event handling vars
     curr_pos = 0
     plots = [plot_msg_trend, plot_general, plot_users]

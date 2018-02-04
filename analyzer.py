@@ -114,7 +114,7 @@ class Chat:
         return members
 
 
-def plot_msg_trend(members):
+def plot_msgtrend(members):
     """Visualizes overall message trend"""
 
     # set up data
@@ -156,24 +156,13 @@ def plot_msg_trend(members):
         lbl = mxm[0].strftime('%a, %d.%m.%Y')
         plt.annotate(lbl, xy=mxm, xytext=(-10, -6), rotation=90, textcoords='offset points', size='small')
 
-    plt.subplot(212)
     # set up same date xlables as before
     plt.gca().xaxis.set_major_formatter(mdts.DateFormatter('%b %Y'))
     plt.gca().xaxis.set_major_locator(mdts.MonthLocator(interval=(period // 300) or 1))
-    # get index of first and last message
+    # plot activity period
+    plt.subplot(212)
     for i in range(len(members)):
-        xm = 1
-        for j in range(period):
-            if members[i].days[j]:
-                xm = (j+period*0.03) / period
-                break
-        xn = 0
-        for j in range(period-1, -1, -1):
-            if members[i].days[j]:
-                xn = (j-period*0.03) / period
-                break
-        # plot activity line
-        plt.axhline(y=i, xmin=xm, xmax=xn, linewidth=10, color=SPEC_THEME[i])
+        plt.scatter(dates, [i if d else None for d in members[i].days], color=SPEC_THEME[i], alpha=0.3, s=100)
     # limiters, legend, labels
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
@@ -185,7 +174,7 @@ def plot_msg_trend(members):
     plt.title('Activity Period', y=1.03, weight='bold')
     plt.subplots_adjust(wspace=0.20, hspace=0.40)
 
-def plot_general(members):
+def plot_usetime(members):
     """Visualizes data concerning all users"""
 
     # plot message count average on specific day of the week
@@ -303,7 +292,6 @@ def plot_users(members):
 def key_event(e):
     """Handles key events for scrolling through the plots"""
     global curr_pos
-
     if e.key == 'right':
         curr_pos += 1
     elif e.key == 'left':
@@ -323,7 +311,7 @@ if __name__ == '__main__':
     SPEC_THEME = SPEC_THEME[len(SPEC_THEME)-len(members):] if len(members) <= len(SPEC_THEME) else sample(list(clrs.cnames), len(members))
     # init key event handling vars
     curr_pos = 0
-    plots = [plot_msg_trend, plot_general, plot_users]
+    plots = [plot_msgtrend, plot_usetime, plot_users]
     # set custom style
     plt.style.use('seaborn-whitegrid')
     plt.rcParams['xtick.major.pad'] = 10

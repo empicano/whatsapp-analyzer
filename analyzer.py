@@ -162,7 +162,7 @@ def plot_msgtrend(members):
     # plot activity period
     plt.subplot(212)
     for i in range(len(members)):
-        plt.scatter(dates, [i if d else None for d in members[i].days], color=SPEC_THEME[i], alpha=0.3, s=100)
+        plt.scatter(dates, [i if d else None for d in members[i].days], color=SPEC_THEME[i], alpha=.4, s=tuple(map(lambda e: e/max(days)*1500, members[i].days)))
     # limiters, legend, labels
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
@@ -174,26 +174,27 @@ def plot_msgtrend(members):
     plt.title('Activity Period', y=1.03, weight='bold')
     plt.subplots_adjust(wspace=0.20, hspace=0.40)
 
+
 def plot_usetime(members):
     """Visualizes data concerning all users"""
 
     # plot message count average on specific day of the week
     period = len(members[0].days)
-    wds = [sum([sum(m.hours[i]) for m in members]) for i in range(7)]
-    fst = min([m.first for m in members])
-    wd1 = fst.weekday()  # weekday of first message
-    wd2 = (fst + dt.timedelta(days=period-1)).weekday()  # weekday of last message
-    wdn = [(period - wd2 - 1) // 7 for _ in range(7)]
-    for i in range(7, (wd1 if wd1 else 7), -1):
-        wdn[i-1] += 1
-    for i in range(wd2+1):
-        wdn[i] += 1
-    weekdays = tuple(map(lambda e, a: e / a, wds, wdn))
+    wd_sum_msgs = [sum([sum(m.hours[i]) for m in members]) for i in range(7)]
+    frst = min([m.first for m in members])
+    frst_wd = frst.weekday()  # weekday of first message
+    last_wd = (frst + dt.timedelta(days=period-1)).weekday()  # weekday of last message
+    wd_count = [(period - last_wd - 1) // 7 for _ in range(7)]
+    for i in range(7, (frst_wd if frst_wd else 7), -1):
+        wd_count[i-1] += 1
+    for i in range(last_wd+1):
+        wd_count[i] += 1
+    wd_avg_msgs = tuple(map(lambda e, a: e / a, wd_sum_msgs, wd_count))
     plt.subplot(221)
-    plt.bar(range(7), weekdays, align='center', color=GNRL_THEME[0])
+    plt.bar(range(7), wd_avg_msgs, align='center', color=GNRL_THEME[0])
     # limiters, xticks, labels
     plt.xticks(range(7), ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
-    plt.ylim([0, max(weekdays)*1.1])
+    plt.ylim([0, max(wd_avg_msgs)*1.1])
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
     plt.gca().tick_params(top='off', right='off')

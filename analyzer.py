@@ -59,14 +59,14 @@ class Chat:
         chfile.close()
 
     @staticmethod
-    def str_to_date(s):
-        """Converts string of the format dd.mm.yy to a datetime object"""
-        return dt.date(2000+int(s[6:8]), int(s[3:5]), int(s[:2]))
+    def strdate(s):
+        """Extracts date and hour out of given string"""
+        return dt.date(2000+int(s[6:8]), int(s[3:5]), int(s[:2])), int(s[10:12])
 
     @staticmethod
-    def date_diff(msg1, msg2):
-        """Calculates number of days that lie between two given messages"""
-        return (Chat.str_to_date(msg2) - Chat.str_to_date(msg1)).days
+    def shftfive(date, hour):
+        """Shifts date so that one day starts and ends at 4 in the morning"""
+        return date - dt.timedelta(days=1) if hour < 4 else date
 
     def _rmnl(self):
         """Removes newline chars from messages"""
@@ -87,13 +87,13 @@ class Chat:
         self._rmnl()
         # initialize vars
         members = []
-        first = self.chat[0]
-        period = Chat.date_diff(first, self.chat[-1]) + 1
+        first = Chat.shftfive(*Chat.strdate(self.chat[0]))
+        period = (Chat.shftfive(*Chat.strdate(self.chat[-1])) - first).days + 1
         # process messages
         for line in self.chat:
             try:
-                date = line[:8]
                 hour = int(line[10:12])
+                date = Chat.shftfive(*Chat.strdate(line))
                 line = line[20:]
                 name = line[:line.index(':')]
                 line = line[line.index(': ') + 2:]
@@ -101,10 +101,10 @@ class Chat:
                 pass  # ignore corrupted messages
             else:
                 if all(member.name != name for member in members):
-                    members.append(Member(name, Chat.str_to_date(date), period))
+                    members.append(Member(name, date, period))
                 for member in members:
                     if member.name == name:
-                        member.add_message(line, Chat.date_diff(first, date), Chat.str_to_date(date).weekday(), hour)
+                        member.add_message(line, (date-first).days, date.weekday(), hour)
         return members
 
 
@@ -199,7 +199,6 @@ def plot_usetime(members):
         # limiters, xticks, labels
         wds = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         plt.xticks(range(7), wds)
-        plt.ylim([0, max(wd_avg_msgs)*1.1])
         plt.gca().spines['top'].set_visible(False)
         plt.gca().spines['right'].set_visible(False)
         plt.gca().tick_params(top='off', right='off')
@@ -210,23 +209,28 @@ def plot_usetime(members):
     def houravg():
         """Visualizes message count average on specific hour of the day"""
 
-        x = np.linspace(0, 23, num=128, endpoint=True)
+        x = np.linspace(0, 24, num=180, endpoint=True)
+        # days are defined to start at 4 in the morning
         overall = [e / period for e in (sum((sum((m.hours_mg[i][j] for i in range(7))) for m in members)) for j in range(24))]
-        # get midweek (mon, tue, wen, thu) and weekend (fri, sat, sun) hours
+        overall = overall[4:] + overall[:5]
+        # get midweek (mon, tue, wen, thu) hours
         midweek = [e / (period*4/7) for e in (sum((sum((m.hours_mg[i][j] for i in range(4))) for m in members)) for j in range(24))]
+        midweek = midweek[4:] + midweek[:5]
+        # get weekend (fri, sat, sun) hours
         weekend = [e / (period*3/7) for e in (sum((sum((m.hours_mg[i][j] for i in range(4, 7))) for m in members)) for j in range(24))]
+        weekend = weekend[4:] + weekend[:5]
         # cubic interpolate
-        f = interp1d(range(24), overall, kind='cubic')
-        g = interp1d(range(24), midweek, kind='cubic')
-        h = interp1d(range(24), weekend, kind='cubic')
+        f = interp1d(range(25), overall, kind='cubic')
+        g = interp1d(range(25), midweek, kind='cubic')
+        h = interp1d(range(25), weekend, kind='cubic')
         # plot
         plt.subplot(212)
         plt.plot(x, f(x), GNRL_THEME[1], ls='-', lw=2)
         plt.plot(x, g(x), GNRL_THEME[2], ls='--', lw=2)
         plt.plot(x, h(x), GNRL_THEME[3], ls='--', lw=2)
         # limiters, ticks, labels, legend
-        plt.xticks(np.arange(min(x), max(x)+1, 1.0))
-        plt.xlim([-1, 24])
+        plt.xticks(range(25), [i for i in range(4, 24)] + [i for i in range(5)])
+        plt.xlim([-1, 25])
         plt.gca().spines['top'].set_visible(False)
         plt.gca().spines['right'].set_visible(False)
         plt.gca().tick_params(top='off', right='off')
@@ -319,6 +323,7 @@ def plot_users(members):
 def key_event(e):
     """Handles key events for scrolling through the plots"""
     global curr_pos
+    # Handle arrow keys
     if e.key == 'right':
         curr_pos += 1
     elif e.key == 'left':

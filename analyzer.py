@@ -186,75 +186,6 @@ def plot_trends(members):
     plt.subplots_adjust(wspace=0.20, hspace=0.40)
 
 
-def plot_usetime(members):
-    """Visualizes data concerning all users"""
-
-    def weekdayavg():
-        """plot message count average on specific day of the week"""
-
-        wd_sum_msgs = [sum([sum(m.hours_mg[i]) for m in members]) for i in range(7)]
-        frst = min([m.first for m in members])
-        frst_wd = frst.weekday()  # weekday of first message
-        last_wd = (frst + dt.timedelta(days=period-1)).weekday()  # weekday of last message
-        wd_count = [(period - last_wd - 1) // 7 for _ in range(7)]
-        for i in range(7, (frst_wd if frst_wd else 7), -1):
-            wd_count[i-1] += 1
-        for i in range(last_wd+1):
-            wd_count[i] += 1
-        wd_avg_msgs = tuple(map(lambda e, a: e / a, wd_sum_msgs, wd_count))
-        plt.subplot(221)
-        plt.bar(range(7), wd_avg_msgs, align='center', color=GNRL_THEME[0])
-        # limiters, xticks, labels
-        wds = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        plt.xticks(range(7), wds)
-        plt.gca().spines['top'].set_visible(False)
-        plt.gca().spines['right'].set_visible(False)
-        plt.gca().tick_params(top='off', right='off')
-        plt.gca().xaxis.grid(False)
-        plt.title('Average Messages per Weekday', y=1.03, weight='bold')
-        plt.ylabel('# Messages')
-
-    def houravg():
-        """Visualizes message count average on specific hour of the day"""
-
-        x = np.linspace(0, 24, num=180, endpoint=True)
-        # days are defined to start at 4 in the morning
-        overall = [e / period for e in (sum((sum((m.hours_mg[i][j] for i in range(7))) for m in members)) for j in range(24))]
-        overall = overall[4:] + overall[:5]
-        # get midweek (mon, tue, wen, thu) hours
-        midweek = [e / (period*4/7) for e in (sum((sum((m.hours_mg[i][j] for i in range(4))) for m in members)) for j in range(24))]
-        midweek = midweek[4:] + midweek[:5]
-        # get weekend (fri, sat, sun) hours
-        weekend = [e / (period*3/7) for e in (sum((sum((m.hours_mg[i][j] for i in range(4, 7))) for m in members)) for j in range(24))]
-        weekend = weekend[4:] + weekend[:5]
-        # cubic interpolate
-        f = interp1d(range(25), overall, kind='cubic')
-        g = interp1d(range(25), midweek, kind='cubic')
-        h = interp1d(range(25), weekend, kind='cubic')
-        # plot
-        plt.subplot(212)
-        plt.plot(x, f(x), GNRL_THEME[1], ls='-', lw=2)
-        plt.plot(x, g(x), GNRL_THEME[2], ls='--', lw=2)
-        plt.plot(x, h(x), GNRL_THEME[3], ls='--', lw=2)
-        # limiters, ticks, labels, legend
-        plt.xticks(range(25), [i for i in range(4, 24)] + [i for i in range(5)])
-        plt.xlim([-1, 25])
-        plt.gca().spines['top'].set_visible(False)
-        plt.gca().spines['right'].set_visible(False)
-        plt.gca().tick_params(top='off', right='off')
-        plt.title('Average Messages per Hour of the Day', y=1.03, weight='bold')
-        plt.ylabel('# Messages')
-        plt.legend(['Overall', 'Midweek (Mo,Tu,We,Th)', 'Weekend (Fr,Sa,Su)'], loc=2)
-
-    # set up general data
-    period = len(members[0].days)
-    # plot
-    weekdayavg()
-    houravg()
-    # adjust spacing
-    plt.subplots_adjust(wspace=0.20, hspace=0.40)
-
-
 def plot_users(members):
     """Visualizes data concerning specific users"""
 
@@ -328,6 +259,94 @@ def plot_users(members):
     plt.subplots_adjust(wspace=0, hspace=0.40)
 
 
+def plot_usetime(members):
+    """Visualizes data concerning all users"""
+
+    def mediacount():
+        """Total message count for each member as bar graph"""
+        plt.subplot(221)
+        period = len(members[0].days)
+        media = [m.media for m in members]
+        barlst = plt.barh(range(len(members)), media, align='center', height=0.5)
+        # set bar colors
+        for i in range(len(barlst)):
+            barlst[i].set_color(SPEC_THEME[i])
+        plt.xlim([0, max(media)*1.15])
+        plt.yticks(range(len(members)), (m.name for m in members))
+        plt.gca().yaxis.grid(False)
+        plt.gca().tick_params(top='off', right='off')
+        # annotate bars with exact values
+        for i in range(len(members)):
+            plt.text(media[i]+max(media)*0.02, i, str(media[i]), ha='left', va='center')
+        plt.title('Media Files Sent during %d Days' % period, y=1.03, weight='bold')
+
+    def weekdayavg():
+        """plot message count average on specific day of the week"""
+
+        wd_sum_msgs = [sum([sum(m.hours_mg[i]) for m in members]) for i in range(7)]
+        frst = min([m.first for m in members])
+        frst_wd = frst.weekday()  # weekday of first message
+        last_wd = (frst + dt.timedelta(days=period-1)).weekday()  # weekday of last message
+        wd_count = [(period - last_wd - 1) // 7 for _ in range(7)]
+        for i in range(7, (frst_wd if frst_wd else 7), -1):
+            wd_count[i-1] += 1
+        for i in range(last_wd+1):
+            wd_count[i] += 1
+        wd_avg_msgs = tuple(map(lambda e, a: e / a, wd_sum_msgs, wd_count))
+        plt.subplot(222)
+        plt.bar(range(7), wd_avg_msgs, align='center', color=GNRL_THEME[0])
+        # limiters, xticks, labels
+        wds = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        plt.xticks(range(7), wds)
+        plt.gca().spines['top'].set_visible(False)
+        plt.gca().spines['right'].set_visible(False)
+        plt.gca().tick_params(top='off', right='off')
+        plt.gca().xaxis.grid(False)
+        plt.title('Average Messages per Weekday', y=1.03, weight='bold')
+        plt.ylabel('# Messages')
+
+    def houravg():
+        """Visualizes message count average on specific hour of the day"""
+
+        x = np.linspace(0, 24, num=180, endpoint=True)
+        # days are defined to start at 4 in the morning
+        overall = [e / period for e in (sum((sum((m.hours_mg[i][j] for i in range(7))) for m in members)) for j in range(24))]
+        overall = overall[4:] + overall[:5]
+        # get midweek (mon, tue, wen, thu) hours
+        midweek = [e / (period*4/7) for e in (sum((sum((m.hours_mg[i][j] for i in range(4))) for m in members)) for j in range(24))]
+        midweek = midweek[4:] + midweek[:5]
+        # get weekend (fri, sat, sun) hours
+        weekend = [e / (period*3/7) for e in (sum((sum((m.hours_mg[i][j] for i in range(4, 7))) for m in members)) for j in range(24))]
+        weekend = weekend[4:] + weekend[:5]
+        # cubic interpolate
+        f = interp1d(range(25), overall, kind='cubic')
+        g = interp1d(range(25), midweek, kind='cubic')
+        h = interp1d(range(25), weekend, kind='cubic')
+        # plot
+        plt.subplot(212)
+        plt.plot(x, f(x), GNRL_THEME[1], ls='-', lw=2)
+        plt.plot(x, g(x), GNRL_THEME[2], ls='--', lw=2)
+        plt.plot(x, h(x), GNRL_THEME[3], ls='--', lw=2)
+        # limiters, ticks, labels, legend
+        plt.xticks(range(25), [i for i in range(4, 24)] + [i for i in range(5)])
+        plt.xlim([-1, 25])
+        plt.gca().spines['top'].set_visible(False)
+        plt.gca().spines['right'].set_visible(False)
+        plt.gca().tick_params(top='off', right='off')
+        plt.title('Average Messages per Hour of the Day', y=1.03, weight='bold')
+        plt.ylabel('# Messages')
+        plt.legend(['Overall', 'Midweek (Mo,Tu,We,Th)', 'Weekend (Fr,Sa,Su)'], loc=2)
+
+    # set up general data
+    period = len(members[0].days)
+    # plot
+    mediacount()
+    weekdayavg()
+    houravg()
+    # adjust spacing
+    plt.subplots_adjust(wspace=0.20, hspace=0.40)
+
+
 def key_event(e):
     """Handles key events for scrolling through the plots"""
     global curr_pos
@@ -351,7 +370,7 @@ if __name__ == '__main__':
     SPEC_THEME = SPEC_THEME[len(SPEC_THEME)-len(members):] if len(members) <= len(SPEC_THEME) else sample(list(clrs.cnames), len(members))
     # init key event handling vars
     curr_pos = 0
-    plots = [plot_trends, plot_usetime, plot_users]
+    plots = [plot_trends, plot_users, plot_usetime]
     # set custom style
     plt.style.use('seaborn-whitegrid')
     plt.rcParams['xtick.major.pad'] = 10

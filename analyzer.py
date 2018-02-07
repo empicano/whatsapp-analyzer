@@ -1,12 +1,9 @@
 import sys
 import numpy as np
 import datetime as dt
+import matplotlib.pyplot as plt, matplotlib.colors as clrs, matplotlib.dates as mdts
 
-import matplotlib.pyplot as plt
-import matplotlib.colors as clrs
-import matplotlib.dates as mdts
-import matplotlib.lines as lns
-
+from math import log
 from random import sample
 from scipy.interpolate import interp1d
 
@@ -32,21 +29,27 @@ class Member:
         self.hours_wd = [[0 for _ in range(24)] for _ in range(7)]  # words in hour at weekday
         self.days = [0 for _ in range(period)]  # messages mapped on days
         self.first = first  # date of first message
+        self.media = 0  # number of media files sent
 
     def add_message(self, message, day, weekday, hour):
         """Adds message data to the user object"""
         self.hours_mg[weekday][hour] += 1
         self.days[day] += 1
+        # excluded words
+        excl = ['<image', 'omitted>']
         # strip words of dots, quotation marks etc.
         for word in message.split():
             self.hours_wd[weekday][hour] += 1
             word = word.lower()
-            while len(word) > 1 and word[-1] in '-,."\'!?:)—':
+            while len(word) > 1 and word[-1] in '*-,."\'!?:—_':
                 word = word[:-1]
-            while len(word) > 1 and word[0] in ',."\'*(-—~#':
+            while len(word) > 1 and word[0] in ',."\'*(-—~#/_':
                 word = word[1:]
-            self.words.setdefault(word, 0)
-            self.words[word] += 1
+            if word not in excl:
+                self.words.setdefault(word, 0)
+                self.words[word] += 1
+            elif word == 'omitted>':
+                self.media += 1
 
 
 class Chat:
@@ -67,6 +70,11 @@ class Chat:
     def shftfive(date, hour):
         """Shifts date so that one day starts and ends at 4 in the morning"""
         return date - dt.timedelta(days=1) if hour < 4 else date
+
+    @staticmethod
+    def idf(word, members):
+        """Calculates idf value for word in members"""
+        return log(len(members) / len([m for m in members if word in m.words]))
 
     def _rmnl(self):
         """Removes newline chars from messages"""
@@ -359,4 +367,17 @@ if __name__ == '__main__':
     plots[0](members)
     # show
     plt.show()
+
+    '''
+    with open('worduse.md', 'w') as mdfile:
+        # write most used and most important words for each member in markdown file
+        for m in sorted(members, key=lambda e: len(e.words), reverse=True):
+            mdfile.write('# ' + m.name + '\nMost used words | Frequency in messages | Most important (tf-idf) words | Frequency in messages\n-|-|-|-\n')
+            most_used = sorted(m.words.items(), key=lambda e: e[1], reverse=True)[:10]
+            avg_per_msg_used = [wd[1] / sum(m.days) for wd in most_used]
+            most_impt = sorted(m.words.items(), key=lambda x: x[1] * Chat.idf(x[0], members), reverse=True)[:10]
+            avg_per_msg_impt = [wd[1] / sum(m.days) for wd in most_impt]
+            for wd_used, avg_used, wd_impt, avg_impt in zip(most_used, avg_per_msg_used, most_impt, avg_per_msg_impt):
+                mdfile.write(wd_used[0] + ' | ' + '{0:.2f}'.format(avg_used*100) + ' % | ' + wd_impt[0] + '| {0:.2f}'.format(avg_impt*100) + ' %\n')
+    '''
 

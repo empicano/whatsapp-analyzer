@@ -12,10 +12,10 @@ from scipy.interpolate import interp1d
 FILE = sys.argv[1] if len(sys.argv) > 1 else '_chat.txt'
 # colors used when plotting message trend
 TRND_THEME = ['#14325c', '#c7c6c1']
-# colors used when plotting general user information
-GNRL_THEME = ['#c7c6c1', '#5398d9', '#ff0000', '#00ff00']
 # colors used when plotting user specific information
 SPEC_THEME = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
+# colors used when plotting general user information
+GNRL_THEME = ['#c7c6c1', '#5398d9', '#ff0000', '#00ff00']
 
 
 class Member:
@@ -36,7 +36,7 @@ class Member:
         self.hours_mg[weekday][hour] += 1
         self.days[day] += 1
         # excluded words
-        excl = ['<image', 'omitted>']
+        excl = ['<image', '<video', '<‎GIF', 'omitted>']
         # strip words of dots, quotation marks etc.
         for word in message.split():
             self.hours_wd[weekday][hour] += 1
@@ -347,6 +347,19 @@ def plot_usetime(members):
     plt.subplots_adjust(wspace=0.20, hspace=0.40)
 
 
+def worduse_md(members, path='worduse.md'):
+    """Generates markdown document with most used and most important (tf-idf) words for each user"""
+    with open(path, 'w') as mdfile:
+        for m in sorted(members, key=lambda e: len(e.words), reverse=True):
+            mdfile.write('# ' + m.name + '\nMost used words | Frequency in messages | Most important (tf-idf) words | Frequency in messages\n-|-|-|-\n')
+            most_used = sorted(m.words.items(), key=lambda e: e[1], reverse=True)[:15]
+            avg_per_msg_used = [wd[1] / sum(m.days) for wd in most_used]
+            most_impt = sorted(m.words.items(), key=lambda x: x[1] * Chat.idf(x[0], members), reverse=True)[:15]
+            avg_per_msg_impt = [wd[1] / sum(m.days) for wd in most_impt]
+            for wd_used, avg_used, wd_impt, avg_impt in zip(most_used, avg_per_msg_used, most_impt, avg_per_msg_impt):
+                mdfile.write(wd_used[0] + ' | ' + '{0:.2f}'.format(avg_used*100) + ' % | ' + wd_impt[0] + '| {0:.2f}'.format(avg_impt*100) + ' %\n')
+
+
 def key_event(e):
     """Handles key events for scrolling through the plots"""
     global curr_pos
@@ -387,16 +400,6 @@ if __name__ == '__main__':
     # show
     plt.show()
 
-    '''
-    with open('worduse.md', 'w') as mdfile:
-        # write most used and most important words for each member in markdown file
-        for m in sorted(members, key=lambda e: len(e.words), reverse=True):
-            mdfile.write('# ' + m.name + '\nMost used words | Frequency in messages | Most important (tf-idf) words | Frequency in messages\n-|-|-|-\n')
-            most_used = sorted(m.words.items(), key=lambda e: e[1], reverse=True)[:10]
-            avg_per_msg_used = [wd[1] / sum(m.days) for wd in most_used]
-            most_impt = sorted(m.words.items(), key=lambda x: x[1] * Chat.idf(x[0], members), reverse=True)[:10]
-            avg_per_msg_impt = [wd[1] / sum(m.days) for wd in most_impt]
-            for wd_used, avg_used, wd_impt, avg_impt in zip(most_used, avg_per_msg_used, most_impt, avg_per_msg_impt):
-                mdfile.write(wd_used[0] + ' | ' + '{0:.2f}'.format(avg_used*100) + ' % | ' + wd_impt[0] + '| {0:.2f}'.format(avg_impt*100) + ' %\n')
-    '''
+    # Uncomment for generating a markdown file containing worduse statistics
+    # worduse_md(members)
 

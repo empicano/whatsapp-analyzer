@@ -12,6 +12,7 @@ Whatsapp-Analyzer is a statistical analysis tool for Whatsapp chats. Using Matpl
 - Average words per message
 - Words written as share
 - Average messages in/on specific hour or weekday
+- Number of media files sent
 
 # How to Use
 

@@ -16,14 +16,14 @@ Whatsapp-Analyzer is a statistical analysis tool for Whatsapp chats. Using Matpl
 
 # How to Use
 
-This program runs on Linux. To get started, you need to export the chat you want to analyze to your computer. To do that, open Whatsapp on your mobile phone and select the chat. Under **group / contact info** you will find the button **export chat** - choose **without media**.
+To get started, you need to export the chat you want to analyze to your computer. To do that, open Whatsapp on your mobile phone and select the chat. Under **group / contact info** you will find the button **export chat** - choose **without media**.
 
-Whatsapp is weirdly inconsistent with the format of exported files. Depending on mobile phone OS and language, the time, date and status message format will be different. This program expects the following format:
+Whatsapp is very inconsistent with the format of exported files. Depending on mobile phone OS and language, the time, date and status message format will be different. This program expects the following format:
 
 
 ```
-dd.mm.yy, hh:mm:ss: Rose Marie: Darling! Its been an age! Tell me, how are you?
-24.01.18, 09:03:56: Mary Jane: Simply splendid. I purchased a new estate: <image omitted>
+dd.mm.yy, hh:mm:ss: Marie Curie: Michael! Its been an age! Tell me, how are you?
+24.01.18, 09:03:56: Michael Faraday: Good. I'm working on an electric motor: <image omitted>
 ```
 
 Place your chat file named **_chat.txt** in the same directory as the analyzer. Alternatively you can hand over a file path as command line argument. Run `python3 analyzer.py [file path]` in your terminal to start the analysis. You can switch between plots using the arrow keys.

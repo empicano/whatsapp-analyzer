@@ -357,7 +357,7 @@ def worduse_md(members, path='worduse.md'):
             most_impt = sorted(m.words.items(), key=lambda x: x[1] * Chat.idf(x[0], members), reverse=True)[:15]
             avg_per_msg_impt = [wd[1] / sum(m.days) for wd in most_impt]
             for wd_used, avg_used, wd_impt, avg_impt in zip(most_used, avg_per_msg_used, most_impt, avg_per_msg_impt):
-                mdfile.write(wd_used[0] + ' | ' + '{0:.2f}'.format(avg_used*100) + ' % | ' + wd_impt[0] + '| {0:.2f}'.format(avg_impt*100) + ' %\n')
+                mdfile.write(wd_used[0] + ' | ' + '{0:.3f}'.format(avg_used) + ' | ' + wd_impt[0] + '| {0:.3f}'.format(avg_impt) + '\n')
 
 
 def key_event(e):

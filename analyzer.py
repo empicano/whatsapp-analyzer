@@ -187,6 +187,7 @@ def message_count(members):
     plt.yticks(range(len(members)), (m.name for m in members))
     plt.gca().yaxis.grid(False)
     plt.gca().tick_params(top='off', right='off')
+    plt.xlabel('# Messages')
     # annotate bars with exakt value
     for i in range(len(members)):
         plt.text(messages[i]+max(messages)*0.02, i, str(messages[i]), ha='left', va='center')
@@ -217,6 +218,7 @@ def word_count(members):
     plt.yticks(range(len(members)), (m.name for m in members))
     plt.gca().yaxis.grid(False)
     plt.gca().tick_params(top='off', right='off')
+    plt.xlabel('# Words')
     # annotate bars exact value
     for i in range(len(members)):
         plt.text(wc_avg[i]+max(wc_avg)*0.02, i, format(wc_avg[i], '.3f'), ha='left', va='center')
@@ -248,6 +250,7 @@ def mediacount(members):
     plt.yticks(range(len(members)), (m.name for m in members))
     plt.gca().yaxis.grid(False)
     plt.gca().tick_params(top='off', right='off')
+    plt.xlabel('# Media Files')
     # annotate bars with exact values
     for i in range(len(members)):
         plt.text(media[i]+max(media)*0.02, i, str(media[i]), ha='left', va='center')
@@ -307,6 +310,7 @@ def hour_avg(members):
     plt.gca().spines['right'].set_visible(False)
     plt.gca().tick_params(top='off', right='off')
     plt.title('Average Messages per Hour of the Day', y=1.03, weight='bold')
+    plt.xlabel('Hour of the Day')
     plt.ylabel('# Messages')
     plt.legend(['Overall', 'Midweek (Mo,Tu,We,Th)', 'Weekend (Fr,Sa,Su)'], loc=2)
 

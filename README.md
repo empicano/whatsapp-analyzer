@@ -1,10 +1,10 @@
-# Introduction
+## Introduction
 
 Whatsapp-Analyzer is a statistical analysis tool for Whatsapp chats. Using Matplotlib, it generates various plots showing, for example, the average number of words chat participants write per message. For the analysis it works on the chat files that can be exported from Whatsapp. Below you can see a selection of plots it produces when analyzing a group chat of mine:
 
 ![example](example.png)
 
-# List of Plots
+## List of Plots
 
 - Message Trend
 - Activity Periods
@@ -14,7 +14,7 @@ Whatsapp-Analyzer is a statistical analysis tool for Whatsapp chats. Using Matpl
 - Average messages in/on specific hour or weekday
 - Number of media files sent
 
-# How to Use
+## How to Use
 
 To get started, you need to export the chat you want to analyze to your computer. To do that, open Whatsapp on your mobile phone and select the chat. Under **group / contact info** you will find the button **export chat** - choose **without media**.
 
@@ -26,9 +26,9 @@ dd.mm.yy, hh:mm:ss: Marie Curie: Michael! Its been an age! Tell me, how are you?
 24.01.18, 09:03:56: Michael Faraday: Good. I'm working on an electric motor: <image omitted>
 ```
 
-Place your chat file named **_chat.txt** in the same directory as the analyzer. Alternatively you can hand over a file path as command line argument. Run `python3 analyzer.py [file path]` in your terminal to start the analysis. You can switch between plots using the arrow keys.
+Place your chat file named **_chat.txt** in the same directory as the analyzer. Alternatively you can hand over a file path as command line argument. Run `python3 analyzer.py [file path]` in your terminal to start the analysis.
 
-# Needed Dependencies
+## Needed Dependencies
 
 - [matplotlib](https://matplotlib.org)
 - [scipy](https://www.scipy.org)

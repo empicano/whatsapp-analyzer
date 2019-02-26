@@ -86,7 +86,7 @@ class Chat:
                 if prev: res.append(prev)
                 prev = msg
             else:
-                prev = prev[:-1] + ' ' + msg
+                if prev: prev = prev[:-1] + ' ' + msg
         res.append(prev)
         self.chat = res
 

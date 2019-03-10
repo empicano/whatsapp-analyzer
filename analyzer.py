@@ -9,17 +9,22 @@ from scipy.interpolate import interp1d
 
 
 # chat file
-FILE = sys.argv[1] if len(sys.argv) > 1 else '_chat.txt'
+FILE = sys.argv[1] if len(sys.argv) > 1 else 'chat.txt'
 # colors used when plotting message trend
-TRND_THEME = ['#14325c', '#c7c6c1']
+TRND_THEME = ['#b0b0b0', '#07a0c3', '#e3170a']
 # colors used when plotting user specific information
+BACK = '#dddddd'
 SPEC_THEME = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
 # colors used when plotting general user information
 GNRL_THEME = ['#c7c6c1', '#5398d9', '#ff0000', '#00ff00']
 
 
 class Member:
-    """Represents chat participator"""
+    """Represent a chat participator"""
+
+    # TODO
+    # - make smallest first value static
+    # - save len(days) as static value
 
     def __init__(self, name, first, period):
         """Initializes object and sets variables to default values"""
@@ -53,7 +58,7 @@ class Member:
 
 
 class Chat:
-    """Represents the chat data"""
+    """Represent the chat data"""
 
     def __init__(self, path):
         """Initializes object and reads the chat file"""
@@ -63,21 +68,21 @@ class Chat:
 
     @staticmethod
     def strdate(s):
-        """Extracts date and hour out of given string"""
+        """Extract date and hour out of given string"""
         return dt.date(2000+int(s[6:8]), int(s[3:5]), int(s[:2])), int(s[10:12])
 
     @staticmethod
     def shftfive(date, hour):
-        """Shifts date so that one day starts and ends at 4 in the morning"""
+        """Shift date so that one day starts and ends at 4 in the morning"""
         return date - dt.timedelta(days=1) if hour < 4 else date
 
     @staticmethod
     def idf(word, members):
-        """Calculates idf value for word in members"""
+        """Calculate idf value for word in members"""
         return log(len(members) / len([m for m in members if word in m.words]))
 
     def _rmnl(self):
-        """Removes newline chars from messages"""
+        """Remove newline chars from messages"""
         res = []
         prev = None
         for msg in self.chat:
@@ -91,7 +96,7 @@ class Chat:
         self.chat = res
 
     def process(self):
-        """Orders and prepares data for plotting"""
+        """Order and prepare data for plotting"""
         self._rmnl()
         # initialize vars
         members = []
@@ -116,63 +121,113 @@ class Chat:
         return members
 
 
-def message_trend(members):
-    """Visualizes overall message trend"""
+def trend(members):
+    """Visualize overall message count trend.
+
+    This includes raw message count/day, mean count/day for every
+    month and overall mean count/day.
+    """
     period = len(members[0].days)
     days = [sum(m.days[i] for m in members) for i in range(period)]
-    dates = [min(m.first for m in members) + dt.timedelta(days=i) for i in range(period)]
-    # set up date xlables
-    plt.gca().xaxis.set_major_formatter(mdts.DateFormatter('%b %Y'))
-    plt.gca().xaxis.set_major_locator(mdts.MonthLocator(interval=(period // 300) or 1))
-    # convert from daily message count to monthly average
     first = min(m.first for m in members)
+    dates = [first + dt.timedelta(days=i) for i in range(period)]
+
+    # convert from daily message count to monthly average
     start = first if first.day==1 else first.replace(day=1, month=first.month+1)
-    m_diff = ((first + dt.timedelta(days=period)).year - start.year) * 12 + (first + dt.timedelta(days=period)).month - start.month
-    idxs = [(start-first).days] + [(start.replace(month=(start.month+i) % 12 + 1, year=start.year + ((start.month+i) // 12)) - first).days for i in range(0, m_diff)]
-    x = [dates[i] for i in idxs[:-1]]
-    months = [np.mean(days[idxs[i]:idxs[i+1]]) for i in range(len(idxs)-1)]
-    # plot monthly average of messages per day
-    plt.bar(x, months, [idxs[i]-idxs[i-1] for i in range(1, len(idxs))], color=TRND_THEME[1], align='edge')
-    # plot message count on all days
-    plt.plot(dates, days, TRND_THEME[0])
-    # limiters, legend, labels
-    plt.xlim([dates[0]-dt.timedelta(days=period*0.03), dates[period-1]+dt.timedelta(days=period*0.03)])
+    delta_months = (
+        ((first + dt.timedelta(days=period)).year - start.year) * 12
+        + (first + dt.timedelta(days=period)).month
+        - start.month
+    )
+    # get indexes of first day of every month in days list
+    indexes = [(start-first).days] + [(start.replace(
+        month=(start.month+i) % 12 + 1,
+        year=start.year + (start.month+i) // 12
+    ) - first).days for i in range(0, delta_months)]
+    # get monthly messages/day mean
+    months = [np.mean(days[indexes[i]:indexes[i+1]]) for i in range(len(indexes)-1)]
+
+    # plot total messages per day
+    plt.figure()
+    stemline = plt.stem(dates, days, markerfmt=' ', basefmt=' ')[1]
+    plt.setp(stemline, linestyle='-', color=TRND_THEME[0])
+    # plot overall mean of messages day
+    mean = np.mean(days)
+    plt.axhline(mean, color=TRND_THEME[2], linewidth=3)
+    # plot monthly mean of messages per day
+    x = [dates[i] for i in indexes[:-1]]
+    plt.plot(x, months, color=TRND_THEME[1], linewidth=3)
+
+    # set style attributes
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
     plt.gca().tick_params(top='off', right='off')
-    plt.legend(['Total Number on Specific Day', 'On Average in that Month'], loc=2)
+    plt.legend([
+        'Overall Mean of Messages per Day',
+        'Monthly Mean of Messages per Day',
+        'Total Messages per Day'
+    ], loc=2)
     plt.title('Messages per Day', y=1.03, weight='bold')
-    plt.ylabel('# Messages')
+
+    # annotate mean line
+    plt.annotate(
+        round(mean, 2),
+        xy=(min(m.first for m in members) + dt.timedelta(days=period-1), mean),
+        xytext=(8, -3),
+        textcoords='offset points',
+        size='small'
+    )
     # annotate maxima
-    mxma = []
-    cp = days[:]
-    for i in range(3):
-        mxma.append((dates[days.index(max(cp))], max(cp)))
-        cp.remove(max(cp))
-    for mxm in mxma:
-        lbl = mxm[0].strftime('%a, %d.%m.%Y')
-        plt.annotate(lbl, xy=mxm, xytext=(-10, -6), rotation=90, textcoords='offset points', size='small')
+    maxima = sorted(days, reverse=True)[:3]
+    annotations = [(dates[days.index(m)], m) for m in maxima]
+    for a in annotations:
+        plt.annotate(
+            a[0].strftime('%d.%m.%Y'),
+            xy=a,
+            xytext=(-10, -6),
+            rotation=90,
+            textcoords='offset points',
+            size='small'
+        )
 
 
 def activity(members):
-    """Visualizes member activity over whole chat period"""
+    """Visualize member activity over whole chat period.
+
+    Display weekly means for every user multiple times in line charts
+    emphasizing one user at a time.
+    """
     period = len(members[0].days)
     days = [sum(m.days[i] for m in members) for i in range(period)]
-    dates = [min(m.first for m in members) + dt.timedelta(days=i) for i in range(period)]
-    # set up date xlables
-    plt.gca().xaxis.set_major_formatter(mdts.DateFormatter('%b %Y'))
-    plt.gca().xaxis.set_major_locator(mdts.MonthLocator(interval=(period // 300) or 1))
+    first = min(m.first for m in members)
+
+    # define subplots
+    fig, axarr = plt.subplots(len(members), sharex=True, sharey=True)
+    # compute weekly means
+    index = (7 - first.weekday()) % 7
+    weeks = [
+        [np.mean(members[i].days[k:k+7]) for k in range(index, period, 7)]
+        for i in range(len(members))
+    ]
+    dates = [first + dt.timedelta(days=i) for i in range(index, period, 7)]
+
+    # plot multiple times with different emphasis
     for i in range(len(members)):
-        plt.scatter(dates, [i if d else None for d in members[i].days], color=SPEC_THEME[i], alpha=.4, s=tuple(map(lambda e: e/max(days)*1500, members[i].days)))
-    # limiters, legend, labels
-    plt.gca().spines['top'].set_visible(False)
-    plt.gca().spines['right'].set_visible(False)
-    plt.gca().tick_params(top='off', right='off')
-    plt.gca().yaxis.grid(False)
-    plt.gca().set_yticklabels([''] + [m.name for m in members])
-    plt.xlim([dates[0]-dt.timedelta(days=period*0.03), dates[period-1]+dt.timedelta(days=period*0.03)])
-    plt.ylim([-1, len(members)])
-    plt.title('Activity Period', y=1.03, weight='bold')
+        for j in range(len(members)):
+            if i != j: axarr[i].plot(dates, weeks[j], color=BACK, linewidth=0.5)
+        axarr[i].plot(dates, weeks[i], color=SPEC_THEME[i], linewidth=3)
+        # set style attributes
+        axarr[i].spines['top'].set_visible(False)
+        axarr[i].spines['right'].set_visible(False)
+        axarr[i].tick_params(top='off', right='off')
+        axarr[i].xaxis.grid(False)
+        axarr[i].set_ylabel(members[i].name, labelpad=25, rotation=0, ha='right')
+
+    # set title
+    fig.add_subplot(111, frameon=False)
+    plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
+    plt.grid(False)
+    plt.title('User Activity (Weekly Means)', y=1.03, weight='bold')
 
 
 def message_count(members):
@@ -332,7 +387,7 @@ if __name__ == '__main__':
     chat = Chat(FILE)
     members = sorted(chat.process(), key=lambda m: sum(m.days))
     SPEC_THEME = SPEC_THEME[len(SPEC_THEME)-len(members):] if len(members) <= len(SPEC_THEME) else sample(list(clrs.cnames), len(members))
-    # set custom style
+    # set custom plot style
     plt.style.use('seaborn-whitegrid')
     plt.rcParams['xtick.major.pad'] = 10
     plt.rcParams['ytick.major.pad'] = 10
@@ -340,14 +395,12 @@ if __name__ == '__main__':
     plt.rcParams['ytick.major.size'] = 5
     plt.rcParams['patch.linewidth'] = 0.4  # width of pie chart lines
     plt.rcParams['axes.edgecolor'] = 'black'
-    # prepare window
-    fig = plt.figure()
-    fig.canvas.set_window_title('Whatsapp Analyzer')
     # show plots
-    fns = [message_trend, activity, message_count, message_count_pie, word_count, word_count_pie, mediacount, weekday_avg, hour_avg]
+    fns = [trend, activity, trend]  # [trend, activity, message_count, message_count_pie, word_count, word_count_pie, mediacount, weekday_avg, hour_avg]
     for fn in fns:
         fn(members)
-        plt.show()
+        plt.gcf().canvas.set_window_title('Whatsapp Analyzer')
+    plt.show()
 
     # Uncomment for generating a markdown file containing worduse statistics
     # worduse_md(members)

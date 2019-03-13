@@ -1,7 +1,13 @@
 import sys
 import numpy as np
 import datetime as dt
-import matplotlib.pyplot as plt, matplotlib.colors as clrs, matplotlib.dates as mdts
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib.colors as clrs
+import matplotlib.dates as mdts
+import matplotlib.ticker as mtick
+import matplotlib.patches as mpatches
 
 from math import log
 from random import sample
@@ -25,6 +31,10 @@ class Member:
     # TODO
     # - make smallest first value static
     # - save len(days) as static value
+    # - alle themes zu einem zusammenfassen
+    # - variablen in dieser Klasse umbenennen für mehr klarheit
+    # - Schriftart und Größe der Kommentare in den Graphen anpassen
+    # - Farbe der User in den Usern speichern?
 
     def __init__(self, name, first, period):
         """Initializes object and sets variables to default values"""
@@ -149,29 +159,26 @@ def trend(members):
 
     # plot total messages per day
     plt.figure()
-    stemline = plt.stem(dates, days, markerfmt=' ', basefmt=' ')[1]
+    stemline = plt.stem(dates, days, markerfmt=' ', basefmt=' ', label='Total Messages per Day')[1]
     plt.setp(stemline, linestyle='-', color=TRND_THEME[0])
     # plot overall mean of messages day
     mean = np.mean(days)
-    plt.axhline(mean, color=TRND_THEME[2], linewidth=3)
+    plt.axhline(mean, color=TRND_THEME[2], linewidth=3, label='Overall Mean of Messages per Day')
     # plot monthly mean of messages per day
     x = [dates[i] for i in indexes[:-1]]
-    plt.plot(x, months, color=TRND_THEME[1], linewidth=3)
+    plt.plot(x, months, color=TRND_THEME[1], linewidth=3, label='Monthly Mean of Messages per Day')
 
     # set style attributes
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
     plt.gca().tick_params(top='off', right='off')
-    plt.legend([
-        'Overall Mean of Messages per Day',
-        'Monthly Mean of Messages per Day',
-        'Total Messages per Day'
-    ], loc=2)
+    plt.gca().xaxis.grid(False)
+    plt.legend(loc=2)
     plt.title('Messages per Day', y=1.03, weight='bold')
 
     # annotate mean line
     plt.annotate(
-        round(mean, 2),
+        '{0:.{digits}f}'.format(mean, digits=2),
         xy=(min(m.first for m in members) + dt.timedelta(days=period-1), mean),
         xytext=(8, -3),
         textcoords='offset points',
@@ -227,7 +234,100 @@ def activity(members):
     fig.add_subplot(111, frameon=False)
     plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
     plt.grid(False)
-    plt.title('User Activity (Weekly Means)', y=1.03, weight='bold')
+    plt.title('User Activity (Weekly Messages / Day Means)', y=1.03, weight='bold')
+
+
+def shares(members):
+    """Visualize conversation shares.
+
+    This includes number of messages as share, number of words as share
+    and average words per message.
+    """
+    fig = plt.figure()
+
+    # plot stacked bar plots visualizing shares of messages, text and media files
+    count = [
+        [sum(m.days) for m in members],
+        [sum(m.words.values()) for m in members],
+        [m.media for m in members]
+    ]
+    for i in range(3):
+        ax = fig.add_subplot(161 + i, xlim=[0, 1])
+        c = count[i]
+        total = sum(c)
+        shares = [c / total for c in c]
+        for j in range(len(members)):
+            x = plt.bar(0.3, shares[j], 0.6, bottom=sum(shares[:j]), color=SPEC_THEME[j])
+            p = x.patches[0]
+            # annotate segment with total value
+            if p.get_height() > 0.03:
+                ax.text(
+                    p.get_x() + p.get_width() / 2,
+                    p.get_y() + p.get_height() / 2,
+                    c[j],
+                    ha='center',
+                    va='center',
+                    size='small'
+                )
+
+        # set style attribute
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.tick_params(right='off', direction='inout', length=10)
+        ax.grid(False)
+        ax.xaxis.set_visible(False)
+        ax.set_yticks([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
+        if i: ax.set_yticklabels([])
+        else: ax.set_yticklabels(['{:.0f}%'.format(x*100) for x in plt.gca().get_yticks()])
+        ax.text(
+            p.get_x() + p.get_width() / 2,
+            -0.04,
+            ('Messages Sent', 'Words Written', 'Media Files Sent')[i],
+            ha='center'
+        )
+
+    # set title
+    fig.add_subplot(121, frameon=False)
+    plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
+    plt.grid(False)
+    plt.title('Shares of Messages, Words and Media Files', y=1.03, weight='bold')
+
+    # plot overall mean of númber of words per message
+    ax = fig.add_subplot(222)
+    mean = sum([sum(m.words.values()) for m in members]) / sum([sum(m.days) for m in members])
+    plt.axvline(mean, color=TRND_THEME[2], linewidth=3, label='Overall Mean', zorder=0)
+    plt.legend(loc=0)
+
+    # plot average number of words per message
+    averages = [sum(m.words.values()) / sum(m.days) for m in members]
+    plt.barh(range(len(members)), averages, 0.5, align='center', color=SPEC_THEME)
+    plt.title('Average Words per Message', y=1.03, weight='bold')
+
+    # set style attributes
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.yaxis.grid(False)
+    ax.yaxis.set_visible(False)
+    ax.tick_params(top='off')
+
+    # annotate with exact values
+    for i in range(len(members)):
+        plt.text(
+            averages[i] + max(averages) * 0.02,
+            i,
+            '{0:.{digits}f}'.format(averages[i], digits=2),
+            ha='left',
+            va='center',
+            size='small'
+        )
+
+    # display legend
+    fig.add_subplot(224, frameon=False)
+    plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
+    plt.grid(False)
+    patches = [mpatches.Patch(label=m.name, color=c) for m, c in zip(members, SPEC_THEME)]
+    plt.legend(handles=patches[::-1], loc=10)
 
 
 def message_count(members):
@@ -243,7 +343,7 @@ def message_count(members):
     plt.gca().yaxis.grid(False)
     plt.gca().tick_params(top='off', right='off')
     plt.xlabel('# Messages')
-    # annotate bars with exakt value
+    # annotate bars with exact value
     for i in range(len(members)):
         plt.text(messages[i]+max(messages)*0.02, i, str(messages[i]), ha='left', va='center')
     plt.title('Total Messages Sent during %d Days' % period, y=1.03, weight='bold')
@@ -387,19 +487,23 @@ if __name__ == '__main__':
     chat = Chat(FILE)
     members = sorted(chat.process(), key=lambda m: sum(m.days))
     SPEC_THEME = SPEC_THEME[len(SPEC_THEME)-len(members):] if len(members) <= len(SPEC_THEME) else sample(list(clrs.cnames), len(members))
+
     # set custom plot style
     plt.style.use('seaborn-whitegrid')
     plt.rcParams['xtick.major.pad'] = 10
     plt.rcParams['ytick.major.pad'] = 10
     plt.rcParams['xtick.major.size'] = 5
     plt.rcParams['ytick.major.size'] = 5
-    plt.rcParams['patch.linewidth'] = 0.4  # width of pie chart lines
-    plt.rcParams['axes.edgecolor'] = 'black'
+
+    plt.rc('patch', linewidth=0)
+    plt.rc('axes', edgecolor='black')
+
     # show plots
-    fns = [trend, activity, trend]  # [trend, activity, message_count, message_count_pie, word_count, word_count_pie, mediacount, weekday_avg, hour_avg]
-    for fn in fns:
-        fn(members)
+    plots = [trend, shares]  # [trend, activity, message_count, message_count_pie, word_count, word_count_pie, mediacount, weekday_avg, hour_avg]
+    for plot in plots:
+        plot(members)
         plt.gcf().canvas.set_window_title('Whatsapp Analyzer')
+        plt.show(block=False)
     plt.show()
 
     # Uncomment for generating a markdown file containing worduse statistics

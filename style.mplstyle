@@ -1,0 +1,34 @@
+# see https://matplotlib.org/tutorials/introductory/customizing.html#customizing-with-matplotlibrc-files for an explanation of the different attributes
+
+axes.titlepad : 20
+axes.titleweight : bold
+axes.titlesize : x-large
+axes.xmargin : 0
+axes.ymargin : 0
+axes.spines.top : False
+axes.spines.right : False
+axes.axisbelow : True
+axes.labelsize : medium
+
+date.autoformatter.month : %b %Y
+
+font.size : 8
+
+grid.linewidth : 0.1
+
+legend.loc : best
+legend.frameon : False
+legend.fontsize : large
+legend.handletextpad: 2
+legend.handlelength : 1
+
+lines.linewidth : 3
+
+xtick.major.pad : 10
+xtick.major.size : 5
+xtick.labelsize : medium
+
+ytick.major.pad : 10
+ytick.major.size : 5
+ytick.labelsize : medium
+

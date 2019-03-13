@@ -33,8 +33,8 @@ class Member:
     # - save len(days) as static value
     # - alle themes zu einem zusammenfassen
     # - variablen in dieser Klasse umbenennen für mehr klarheit
-    # - Schriftart und Größe der Kommentare in den Graphen anpassen
     # - Farbe der User in den Usern speichern?
+    # - member list mit dem aktivsten chatteilnehmer als erstes ordnen
 
     def __init__(self, name, first, period):
         """Initializes object and sets variables to default values"""
@@ -160,21 +160,18 @@ def trend(members):
     # plot total messages per day
     plt.figure()
     stemline = plt.stem(dates, days, markerfmt=' ', basefmt=' ', label='Total Messages per Day')[1]
-    plt.setp(stemline, linestyle='-', color=TRND_THEME[0])
+    plt.setp(stemline, linewidth=0.5, color=TRND_THEME[0])
     # plot overall mean of messages day
     mean = np.mean(days)
-    plt.axhline(mean, color=TRND_THEME[2], linewidth=3, label='Overall Mean of Messages per Day')
+    plt.axhline(mean, color=TRND_THEME[2], label='Overall Mean of Messages per Day')
     # plot monthly mean of messages per day
     x = [dates[i] for i in indexes[:-1]]
-    plt.plot(x, months, color=TRND_THEME[1], linewidth=3, label='Monthly Mean of Messages per Day')
+    plt.plot(x, months, color=TRND_THEME[1], label='Monthly Mean of Messages per Day')
 
     # set style attributes
-    plt.gca().spines['top'].set_visible(False)
-    plt.gca().spines['right'].set_visible(False)
-    plt.gca().tick_params(top='off', right='off')
-    plt.gca().xaxis.grid(False)
-    plt.legend(loc=2)
-    plt.title('Messages per Day', y=1.03, weight='bold')
+    plt.gca().yaxis.grid(True)
+    plt.legend()
+    plt.title('Messages per Day')
 
     # annotate mean line
     plt.annotate(
@@ -182,7 +179,6 @@ def trend(members):
         xy=(min(m.first for m in members) + dt.timedelta(days=period-1), mean),
         xytext=(8, -3),
         textcoords='offset points',
-        size='small'
     )
     # annotate maxima
     maxima = sorted(days, reverse=True)[:3]
@@ -194,7 +190,6 @@ def trend(members):
             xytext=(-10, -6),
             rotation=90,
             textcoords='offset points',
-            size='small'
         )
 
 
@@ -221,20 +216,16 @@ def activity(members):
     # plot multiple times with different emphasis
     for i in range(len(members)):
         for j in range(len(members)):
-            if i != j: axarr[i].plot(dates, weeks[j], color=BACK, linewidth=0.5)
-        axarr[i].plot(dates, weeks[i], color=SPEC_THEME[i], linewidth=3)
+            axarr[i].plot(dates, weeks[j], color=BACK, linewidth=0.5)
+        axarr[i].plot(dates, weeks[i], color=SPEC_THEME[i])
         # set style attributes
-        axarr[i].spines['top'].set_visible(False)
-        axarr[i].spines['right'].set_visible(False)
-        axarr[i].tick_params(top='off', right='off')
-        axarr[i].xaxis.grid(False)
-        axarr[i].set_ylabel(members[i].name, labelpad=25, rotation=0, ha='right')
+        axarr[i].yaxis.grid(True)
+        axarr[i].set_ylabel(members[i].name, labelpad=20, rotation=0, ha='right')
 
     # set title
     fig.add_subplot(111, frameon=False)
-    plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
-    plt.grid(False)
-    plt.title('User Activity (Weekly Messages / Day Means)', y=1.03, weight='bold')
+    plt.tick_params(labelcolor='none', left=False, bottom=False)
+    plt.title('User Activity (Weekly Messages / Day Means)')
 
 
 def shares(members):
@@ -257,7 +248,7 @@ def shares(members):
         total = sum(c)
         shares = [c / total for c in c]
         for j in range(len(members)):
-            x = plt.bar(0.3, shares[j], 0.6, bottom=sum(shares[:j]), color=SPEC_THEME[j])
+            x = plt.bar(0.6, shares[j], 0.6, bottom=sum(shares[:j]), color=SPEC_THEME[j])
             p = x.patches[0]
             # annotate segment with total value
             if p.get_height() > 0.03:
@@ -267,15 +258,11 @@ def shares(members):
                     c[j],
                     ha='center',
                     va='center',
-                    size='small'
                 )
 
-        # set style attribute
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)
+        # set style attributes
         ax.spines['bottom'].set_visible(False)
-        ax.tick_params(right='off', direction='inout', length=10)
-        ax.grid(False)
+        ax.tick_params(direction='inout', length=10)
         ax.xaxis.set_visible(False)
         ax.set_yticks([0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
         if i: ax.set_yticklabels([])
@@ -289,27 +276,25 @@ def shares(members):
 
     # set title
     fig.add_subplot(121, frameon=False)
-    plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
-    plt.grid(False)
-    plt.title('Shares of Messages, Words and Media Files', y=1.03, weight='bold')
+    plt.tick_params(labelcolor='none', left=False, bottom=False)
+    plt.title('Shares of Messages, Words and Media Files')
 
-    # plot overall mean of númber of words per message
-    ax = fig.add_subplot(222)
+    # plot overall mean of number of words per message
+    ax = fig.add_subplot(222, ylim=[-1, len(members)])
     mean = sum([sum(m.words.values()) for m in members]) / sum([sum(m.days) for m in members])
-    plt.axvline(mean, color=TRND_THEME[2], linewidth=3, label='Overall Mean', zorder=0)
-    plt.legend(loc=0)
+    plt.axvline(mean, color=TRND_THEME[2], label='Overall Mean', zorder=0)
+    plt.legend()
 
     # plot average number of words per message
     averages = [sum(m.words.values()) / sum(m.days) for m in members]
-    plt.barh(range(len(members)), averages, 0.5, align='center', color=SPEC_THEME)
-    plt.title('Average Words per Message', y=1.03, weight='bold')
+    plt.barh(range(len(members)), averages, 0.5, color=SPEC_THEME)
+    plt.title('Average Words per Message')
+
+    # TODO annotate mean line
 
     # set style attributes
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.yaxis.grid(False)
+    ax.xaxis.grid(True)
     ax.yaxis.set_visible(False)
-    ax.tick_params(top='off')
 
     # annotate with exact values
     for i in range(len(members)):
@@ -319,97 +304,13 @@ def shares(members):
             '{0:.{digits}f}'.format(averages[i], digits=2),
             ha='left',
             va='center',
-            size='small'
         )
 
     # display legend
     fig.add_subplot(224, frameon=False)
-    plt.tick_params(labelcolor='none', top='off', bottom='off', left='off', right='off')
-    plt.grid(False)
+    plt.tick_params(labelcolor='none', left=False, bottom=False)
     patches = [mpatches.Patch(label=m.name, color=c) for m, c in zip(members, SPEC_THEME)]
     plt.legend(handles=patches[::-1], loc=10)
-
-
-def message_count(members):
-    """Total message count for each member as bar graph"""
-    period = len(members[0].days)
-    messages = [sum(m.days) for m in members]
-    barlst = plt.barh(range(len(members)), messages, align='center', height=0.5)
-    # set bar colors
-    for i in range(len(barlst)):
-        barlst[i].set_color(SPEC_THEME[i])
-    plt.xlim([0, max(messages)*1.15])
-    plt.yticks(range(len(members)), (m.name for m in members))
-    plt.gca().yaxis.grid(False)
-    plt.gca().tick_params(top='off', right='off')
-    plt.xlabel('# Messages')
-    # annotate bars with exact value
-    for i in range(len(members)):
-        plt.text(messages[i]+max(messages)*0.02, i, str(messages[i]), ha='left', va='center')
-    plt.title('Total Messages Sent during %d Days' % period, y=1.03, weight='bold')
-
-
-def message_count_pie(members):
-    """Total message count for each member as pie chart"""
-    messages = [sum(m.days) for m in members]
-    # explode max
-    explode = tuple(0.1 if sum(m.days)==max(messages) else 0 for m in members)
-    plt.pie(messages, explode=explode, labels=[' ' for m in members], colors=SPEC_THEME, autopct='%1.1f%%', startangle=90)
-    plt.axis('equal')
-    plt.title('Total Messages Sent as Share', y=1.03, weight='bold')
-    # configure legend
-    handles, labels = plt.gca().get_legend_handles_labels()
-    plt.legend(handles[::-1], (m.name for m in members[::-1]), loc='center', bbox_to_anchor=(0.95, 0.5))
-
-
-def word_count(members):
-    """Words per message for each member as bar graph"""
-    wc_avg = [sum(m.words.values()) / sum(m.days) for m in members]
-    barlst = plt.barh(range(len(members)), wc_avg, align='center', height=0.5)
-    # set bar colors
-    for i in range(len(barlst)):
-        barlst[i].set_color(SPEC_THEME[i])
-    plt.xlim([0, max(wc_avg)*1.15])
-    plt.yticks(range(len(members)), (m.name for m in members))
-    plt.gca().yaxis.grid(False)
-    plt.gca().tick_params(top='off', right='off')
-    plt.xlabel('# Words')
-    # annotate bars exact value
-    for i in range(len(members)):
-        plt.text(wc_avg[i]+max(wc_avg)*0.02, i, format(wc_avg[i], '.3f'), ha='left', va='center')
-    plt.title('Average Words per Message', y=1.03, weight='bold')
-
-
-def word_count_pie(members):
-    """Total word count for each member as pie chart"""
-    # explode max
-    wc_total = [sum(m.words.values()) for m in members]
-    explode = tuple(0.1 if sum(m.words.values())==max(wc_total) else 0 for m in members)
-    plt.pie(wc_total, explode=explode, labels=[' ' for m in members], colors=SPEC_THEME, autopct='%1.1f%%', startangle=90)
-    plt.axis('equal')
-    plt.title('Total Words Written as Share', y=1.03, weight='bold')
-    # configure legend, spacing
-    handles, labels = plt.gca().get_legend_handles_labels()
-    plt.legend(handles[::-1], (m.name for m in members[::-1]), loc='center', bbox_to_anchor=(0.95, 0.5))
-
-
-def mediacount(members):
-    """Total message count for each member as bar graph"""
-    period = len(members[0].days)
-    media = [m.media for m in members]
-    barlst = plt.barh(range(len(members)), media, align='center', height=0.5)
-    # set bar colors
-    for i in range(len(barlst)):
-        barlst[i].set_color(SPEC_THEME[i])
-    plt.xlim([0, max(media)*1.15])
-    plt.yticks(range(len(members)), (m.name for m in members))
-    plt.gca().yaxis.grid(False)
-    plt.gca().tick_params(top='off', right='off')
-    plt.xlabel('# Media Files')
-    # annotate bars with exact values
-    for i in range(len(members)):
-        plt.text(media[i]+max(media)*0.02, i, str(media[i]), ha='left', va='center')
-    plt.title('Media Files Sent during %d Days' % period, y=1.03, weight='bold')
 
 
 def weekday_avg(members):
@@ -431,9 +332,9 @@ def weekday_avg(members):
     plt.xticks(range(7), wds)
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
-    plt.gca().tick_params(top='off', right='off')
+    plt.gca().tick_params(top=False, right=False)
     plt.gca().xaxis.grid(False)
-    plt.title('Average Messages per Weekday', y=1.03, weight='bold')
+    plt.title('Average Messages per Weekday')
     plt.ylabel('# Messages')
 
 
@@ -463,8 +364,8 @@ def hour_avg(members):
     plt.xlim([-1, 25])
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
-    plt.gca().tick_params(top='off', right='off')
-    plt.title('Average Messages per Hour of the Day', y=1.03, weight='bold')
+    plt.gca().tick_params(top=False, right=False)
+    plt.title('Average Messages per Hour of the Day')
     plt.xlabel('Hour of the Day')
     plt.ylabel('# Messages')
     plt.legend(['Overall', 'Midweek (Mo,Tu,We,Th)', 'Weekend (Fr,Sa,Su)'], loc=2)
@@ -489,17 +390,10 @@ if __name__ == '__main__':
     SPEC_THEME = SPEC_THEME[len(SPEC_THEME)-len(members):] if len(members) <= len(SPEC_THEME) else sample(list(clrs.cnames), len(members))
 
     # set custom plot style
-    plt.style.use('seaborn-whitegrid')
-    plt.rcParams['xtick.major.pad'] = 10
-    plt.rcParams['ytick.major.pad'] = 10
-    plt.rcParams['xtick.major.size'] = 5
-    plt.rcParams['ytick.major.size'] = 5
-
-    plt.rc('patch', linewidth=0)
-    plt.rc('axes', edgecolor='black')
+    plt.style.use('style.mplstyle')
 
     # show plots
-    plots = [trend, shares]  # [trend, activity, message_count, message_count_pie, word_count, word_count_pie, mediacount, weekday_avg, hour_avg]
+    plots = [trend, activity, shares]  # [trend, activity, message_count, message_count_pie, word_count, word_count_pie, mediacount, weekday_avg, hour_avg]
     for plot in plots:
         plot(members)
         plt.gcf().canvas.set_window_title('Whatsapp Analyzer')

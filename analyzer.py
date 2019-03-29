@@ -3,68 +3,84 @@ import os
 import numpy as np
 import datetime as dt
 import matplotlib.pyplot as plt
-import matplotlib.colors as clrs
 
 from math import log
 from random import sample
 from scipy.interpolate import interp1d
 
 
-# chat file
+# path to chat file
 FILE = sys.argv[1] if len(sys.argv) > 1 else 'chat.txt'
-# colors used when plotting message trend
-TRND_THEME = ['#b0b0b0', '#07a0c3', '#e3170a']
-# colors used when plotting user specific information
-BACK = '#dddddd'
-SPEC_THEME = ['#d3d3d3', '#a9a9a9', '#588c7e', '#f2e394', '#f2ae72', '#d96459', '#8c4646']
-# colors used when plotting general user information
-GNRL_THEME = ['#c7c6c1', '#5398d9', '#ff0000', '#00ff00']
 # define the hour in which a day starts and ends, set 0 for start at 00:00 and end at 23:59
 DAYSTART = 4
+# words excluded in all statistics
+EXCLUDED = ['<image', '<video', '<‎GIF', 'omitted>']
+# color scheme
+COLORS = [
+    '#235789',  # line plots
+    '#e3170a',  # mean lines
+    '#bbbbbb',  # stems in trend plot
+    '#dddddd',  # background lines in activity plot
+    '#ffa630',  # midweek line in times plot
+    '#87bba2',  # weekend line in times plot
+    '#33658a',  # user 1
+    '#4d9de0',  # user 2
+    '#86bbd8',  # user 3
+    '#e1bc29',  # user 4
+    '#e28413',  # user 5
+    '#d76a03',  # user 6
+    '#bf3100',  # user 7
+    '#aa8f66',  # user 8
+]
+
 
 class Member:
     """Represent a chat participator"""
 
     # TODO
-    # - make smallest first value static
-    # - save len(days) as static value
-    # - alle themes zu einem zusammenfassen (name: THEME)
-    # - variablen in dieser Klasse umbenennen für mehr klarheit
-    # - Farbe der User in den Usern speichern?
-    # - member list mit dem aktivsten chatteilnehmer als erstes ordnen
     # - werden sticker erkannt?
-    # - len(members) static abspeichern
-    # - auf 2-8 user begrenzen, colors hardcoden, dann auch clrs import löschen
-    # - den fakt, dass ein Tag von 4 bis 4 gehen soll erweitern auch auf die days list etc.
+    # - auf 8 user begrenzen (inaktive cutten, ausprobieren, in den shares muss das rauskommen)
+    # - für alle user anzahlen mal durchprobieren
 
-    hours = [[0 for _ in range(24)] for _ in range(7)]  # messages in hour at weekday
+    hours = [[0]*24 for _ in range(7)]  # messages at weekday in hour
+    period = None  # time frame of chat in days
+    first = None  # date of first message
+    days = None  # messages mapped on days (all users)
 
-    def __init__(self, name, first, period):
-        """Initializes object and sets variables to default values"""
+    def __init__(self, name):
+        """Initialize member object"""
         self.name = name
         self.words = {}
-        self.days = [0 for _ in range(period)]  # messages mapped on days
-        self.first = first  # date of first message
+        self.days = [0]*Member.period  # messages mapped on days (one user)
         self.media = 0  # number of media files sent
 
     def add_message(self, message, day, weekday, hour):
-        """Adds message data to the user object"""
+        """Add data from one message to the user object"""
         Member.hours[weekday][hour] += 1
+        Member.days[day] += 1
         self.days[day] += 1
-        # excluded words
-        excl = ['<image', '<video', '<‎GIF', 'omitted>']
-        # strip words of dots, quotation marks etc.
         for word in message.split():
-            word = word.lower()
-            while len(word) > 1 and word[-1] in '*-,."\'!?:—_':
-                word = word[:-1]
-            while len(word) > 1 and word[0] in ',."\'*(-—~#/_':
-                word = word[1:]
-            if word not in excl:
+            word = Text.strip(word)
+            if word and word not in EXCLUDED:
                 self.words.setdefault(word, 0)
                 self.words[word] += 1
             elif word == 'omitted>':
                 self.media += 1
+
+
+class Text:
+    """Contain methods for working on plain text"""
+
+    @staticmethod
+    def strip(word):
+        """Strip word of dots, quotation marks etc."""
+        word = word.lower()
+        chars = ',."\'*-~—_/#:;!?&()'
+        while word and word[-1] in chars:
+            word = word[:-1]
+        while word and word[0] in chars:
+            word = word[1:]
+        return word
 
 
 class Chat:
@@ -112,8 +128,9 @@ class Chat:
         """Order and prepare data for plotting"""
         self.rnl()
         members = []
-        first = Chat.shftfive(*Chat.strdate(self.chat[0]))
-        period = (Chat.shftfive(*Chat.strdate(self.chat[-1])) - first).days + 1
+        Member.first = Chat.shftfive(*Chat.strdate(self.chat[0]))
+        Member.period = (Chat.shftfive(*Chat.strdate(self.chat[-1])) - Member.first).days + 1
+        Member.days = [0]*Member.period
         # process messages
         for line in self.chat:
             try:
@@ -127,10 +144,10 @@ class Chat:
                 pass  # ignore corrupted messages
             else:
                 if all(member.name != name for member in members):
-                    members.append(Member(name, date, period))
+                    members.append(Member(name))
                 for member in members:
                     if member.name == name:
-                        member.add_message(line, (date-first).days, date.weekday(), hour)
+                        member.add_message(line, (date-Member.first).days, date.weekday(), hour)
         return members
 
 
@@ -140,39 +157,38 @@ def trend(members):
     This includes raw message count/day, mean count/day for every
     month and overall mean count/day.
     """
-    period = len(members[0].days)
-    days = [sum(m.days[i] for m in members) for i in range(period)]
-    first = min(m.first for m in members)
-    dates = [first + dt.timedelta(days=i) for i in range(period)]
-
     # convert from daily message count to monthly average
-    start = first if first.day==1 else first.replace(day=1, month=first.month+1)
+    start = (
+        Member.first if Member.first.day==1
+        else Member.first.replace(day=1, month=Member.first.month+1)
+    )
     delta_months = (
-        ((first + dt.timedelta(days=period)).year - start.year) * 12
-        + (first + dt.timedelta(days=period)).month
+        ((Member.first + dt.timedelta(days=Member.period)).year - start.year) * 12
+        + (Member.first + dt.timedelta(days=Member.period)).month
         - start.month
     )
     # get indexes of first day of every month in days list
-    indexes = [(start-first).days] + [(start.replace(
+    indexes = [(start-Member.first).days] + [(start.replace(
         month=(start.month+i) % 12 + 1,
         year=start.year + (start.month+i) // 12
-    ) - first).days for i in range(0, delta_months)]
+    ) - Member.first).days for i in range(0, delta_months)]
     # get monthly messages/day mean
-    months = [np.mean(days[indexes[i]:indexes[i+1]]) for i in range(len(indexes)-1)]
+    months = [np.mean(Member.days[indexes[i]:indexes[i+1]]) for i in range(len(indexes)-1)]
 
     # plot total messages per day
     plt.figure()
-    stemline = plt.stem(dates, days, markerfmt=' ', basefmt=' ', label='Total Messages per Day')[1]
-    plt.setp(stemline, linewidth=0.5, color=TRND_THEME[0])
-    # plot overall mean of messages day
-    mean = np.mean(days)
-    plt.axhline(mean, color=TRND_THEME[2], label='Overall Mean of Messages per Day')
+    dates = [Member.first + dt.timedelta(days=i) for i in range(Member.period)]
+    s = plt.stem(dates, Member.days, markerfmt=' ', basefmt=' ', label='Total Messages per Day')[1]
+    plt.setp(s, linewidth=0.5, color=COLORS[2])
+    # plot overall mean of messages per day
+    mean = np.mean(Member.days)
+    plt.axhline(mean, color=COLORS[1], label='Overall Mean of Messages per Day')
     # plot monthly mean of messages per day
     x = [dates[i] for i in indexes[:-1]]
-    plt.plot(x, months, color=TRND_THEME[1], label='Monthly Mean of Messages per Day')
+    plt.plot(x, months, color=COLORS[0], label='Monthly Mean of Messages per Day')
 
     # set style attributes
-    plt.ylim(0, top=1.05*max(days))
+    plt.ylim(0, top=1.05*max(Member.days))
     plt.gca().yaxis.grid(True)
     plt.legend()
     plt.title('Messages per Day')
@@ -180,13 +196,13 @@ def trend(members):
     # annotate mean line
     plt.annotate(
         '{0:.{digits}f}'.format(mean, digits=2),
-        xy=(min(m.first for m in members) + dt.timedelta(days=period-1), mean),
+        xy=(Member.first + dt.timedelta(days=Member.period-1), mean),
         xytext=(8, -3),
         textcoords='offset points',
     )
     # annotate maxima
-    maxima = sorted(days, reverse=True)[:3]
-    annotations = [(dates[days.index(m)], m) for m in maxima]
+    maxima = sorted(Member.days, reverse=True)[:3]
+    annotations = [(dates[Member.days.index(m)], m) for m in maxima]
     for a in annotations:
         plt.annotate(
             a[0].strftime('%d.%m.%Y'),
@@ -203,30 +219,24 @@ def activity(members):
     Display weekly means for every user multiple times in line charts
     emphasizing one user at a time.
     """
-    period = len(members[0].days)
-    days = [sum(m.days[i] for m in members) for i in range(period)]
-    first = min(m.first for m in members)
-
-    # define subplots
-    fig, axarr = plt.subplots(len(members), sharex=True, sharey=True, )
-    axarr = axarr[::-1]
     # compute weekly means
-    index = (7 - first.weekday()) % 7
+    fig, axarr = plt.subplots(len(members), sharex=True, sharey=True)
+    index = (7 - Member.first.weekday()) % 7
     weeks = [
-        [np.mean(members[i].days[k:k+7]) for k in range(index, period, 7)]
+        [np.mean(members[i].days[k:k+7]) for k in range(index, Member.period, 7)]
         for i in range(len(members))
     ]
-    dates = [first + dt.timedelta(days=i) for i in range(index, period, 7)]
+    dates = [Member.first + dt.timedelta(days=i) for i in range(index, Member.period, 7)]
 
     # plot multiple times with different emphasis
-    for i in range(len(members)):
+    for i, member in enumerate(members):
         for j in range(len(members)):
-            axarr[i].plot(dates, weeks[j], color=BACK, linewidth=0.5)
-        axarr[i].plot(dates, weeks[i], color=SPEC_THEME[i])
+            axarr[i].plot(dates, weeks[j], color=COLORS[3], linewidth=0.5)
+        axarr[i].plot(dates, weeks[i], color=COLORS[i+6])
         # set style attributes
         axarr[i].yaxis.grid(True)
         axarr[i].set_ylim(0, 1.1*max([max(l) for l in weeks]))
-        axarr[i].set_ylabel(members[i].name, labelpad=20, rotation=0, ha='right')
+        axarr[i].set_ylabel(member.name, labelpad=20, rotation=0, ha='right')
 
     # set title
     fig.add_subplot(111, frameon=False)
@@ -242,6 +252,7 @@ def shares(members):
     """
     # plot stacked bar plots visualizing shares of messages, text and media files
     fig = plt.figure()
+    members = members[::-1]
     count = [
         [sum(m.days) for m in members],
         [sum(m.words.values()) for m in members],
@@ -253,7 +264,7 @@ def shares(members):
         total = sum(c)
         shares = [c / total if total else 1 / len(members) for c in c]
         for j, member in enumerate(members):
-            x = plt.bar(0.6, shares[j], 0.6, bottom=sum(shares[:j]), color=SPEC_THEME[j])
+            x = plt.bar(0.6, shares[j], 0.6, bottom=sum(shares[:j]), color=COLORS[len(members)-j+5])
             p = x.patches[0]
             # annotate segment with total value
             if p.get_height() > 0.03:
@@ -305,12 +316,12 @@ def shares(members):
     for i in range(2):
         # plot overall mean
         ax = fig.add_subplot(220 + (i+1)*2, xmargin=0.05, ymargin=0.15)
-        mean = sum(count[i+1]) / sum([sum(m.days) for m in members])
-        plt.axvline(mean, color=TRND_THEME[2], label='Overall Mean', zorder=0)
+        mean = sum(count[i+1]) / sum(Member.days)
+        plt.axvline(mean, color=COLORS[1], label='Overall Mean', zorder=0)
         plt.legend()
 
         # plot bar chart
-        plt.barh(range(len(members)), averages[i], 0.5, color=SPEC_THEME)
+        plt.barh(range(len(members)), averages[i], 0.5, color=COLORS[5+len(members):5:-1])
         plt.title(titles[i])
 
         # set style attributes
@@ -328,12 +339,9 @@ def times(members):
     This includes message count mean per hour of the day and message
     count mean per day of the week.
     """
-    period = len(members[0].days)
-    first = min([m.first for m in members])
-
-    fwd = first.weekday()  # weekday of first message
-    lwd = (first + dt.timedelta(days=period-1)).weekday()  # weekday of last message
-    week_count = (period - (7-fwd) - (lwd+1)) / 7
+    fwd = Member.first.weekday()  # weekday of first message
+    lwd = (Member.first + dt.timedelta(days=Member.period-1)).weekday()  # weekday of last message
+    week_count = (Member.period - (7-fwd) - (lwd+1)) / 7
     weekday_counts = [(week_count + (i >= fwd) + (i <= lwd)) for i in range(7)]
 
     # plot message count mean per hour of the day (whole week)
@@ -342,16 +350,16 @@ def times(members):
     weekdays = [sum(Member.hours[i]) for i in range(7)]
     means = list(map(lambda w, c: w / c, weekdays, weekday_counts))
     for i in range(7):
-        plt.plot((i*24, (i+1)*24), (means[i]/24,)*2, color=TRND_THEME[2])
+        plt.plot((i*24, (i+1)*24), (means[i]/24,)*2, color=COLORS[1])
     raw = [e / weekday_counts[i] for i, h in enumerate(Member.hours) for e in h]
-    plt.plot(range(24*7+1), raw[DAYSTART:] + raw[:DAYSTART+1])
+    plt.plot(range(24*7+1), raw[DAYSTART:] + raw[:DAYSTART+1], COLORS[0])
 
     # set style attributes
     ax.grid(True)
     ticks = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     plt.xticks(range(0, 24*8, 24), ticks)
     plt.title('Average Message Count per Hour of the Day (Whole Week)')
-    patch, = plt.plot([], color=TRND_THEME[2], label='Daily Mean')
+    patch, = plt.plot([], color=COLORS[1], label='Daily Mean')
     plt.legend(handles=[patch])
 
     # plot message count mean per hour of the day (one day)
@@ -361,13 +369,14 @@ def times(members):
     ranges = [range(7), range(4), range(4, 7)]
     for i in range(3):
         totals = [sum([Member.hours[day][hour] for day in ranges[i]]) for hour in range(24)]
-        div = sum([weekday_counts[x] for x in ranges[i]])
+        div = sum(weekday_counts[x] for x in ranges[i])
         means = [x / div for x in totals]
         # interpolate over longer interval to ensure that end points have same slopes
         means = means * 4
         # cubic interpolate
         f = interp1d(range(-24, 72), means, kind='cubic')
-        plt.plot(x, f(x), GNRL_THEME[i+1], lw=(1 if i else 3), ls=('--' if i else '-'), label=labels[i])
+        if i: plt.plot(x, f(x), COLORS[i+3], lw=1.5, ls=':', label=labels[i])
+        else: plt.plot(x, f(x), COLORS[0], label=labels[0], zorder=10)
 
     # set style attributes
     ax.grid(True)
@@ -393,15 +402,11 @@ def worduse_md(members, path='worduse.md'):
 
 if __name__ == '__main__':
     chat = Chat(FILE)
-    members = sorted(chat.process(), key=lambda m: sum(m.days))
-    SPEC_THEME = SPEC_THEME[len(SPEC_THEME)-len(members):] if len(members) <= len(SPEC_THEME) else sample(list(clrs.cnames), len(members))
-
+    members = sorted(chat.process(), key=lambda m: sum(m.days), reverse=True)
     # set custom plot style
     plt.style.use(os.path.join(sys.path[0], 'style.mplstyle'))
-
     # show plots
-    plots = [times]  # [trend, activity, shares, times]
-    for plot in plots:
+    for plot in [trend, activity, shares, times]:  # [trend, activity, shares, times]
         plot(members)
         plt.gcf().canvas.set_window_title('Whatsapp Analyzer')
         plt.show(block=False)

@@ -10,7 +10,7 @@ from scipy.interpolate import interp1d
 
 
 # path to chat file
-FILE = sys.argv[1] if len(sys.argv) > 1 else 'chat.txt'
+PATH = sys.argv[1] if len(sys.argv) > 1 else 'chat.txt'
 # define the hour in which a day starts and ends, set 0 for start at 00:00 and end at 23:59
 DAYSTART = 4
 # words excluded in all statistics
@@ -41,11 +41,12 @@ class Member:
     # - werden sticker erkannt?
     # - auf 8 user begrenzen (inaktive cutten, ausprobieren, in den shares muss das rauskommen)
     # - für alle user anzahlen mal durchprobieren
+    # - lauter verschiedene Intervalle mal durchprobieren
 
     hours = [[0]*24 for _ in range(7)]  # messages at weekday in hour
-    period = None  # time frame of chat in days
+    period = 0  # time frame of chat in days
     first = None  # date of first message
-    days = None  # messages mapped on days (all users)
+    days = []  # messages mapped on days (all users)
 
     def __init__(self, name):
         """Initialize member object"""
@@ -54,11 +55,11 @@ class Member:
         self.days = [0]*Member.period  # messages mapped on days (one user)
         self.media = 0  # number of media files sent
 
-    def add_message(self, message, day, weekday, hour):
+    def add_message(self, message, date):
         """Add data from one message to the user object"""
-        Member.hours[weekday][hour] += 1
-        Member.days[day] += 1
-        self.days[day] += 1
+        Member.hours[date.weekday()][date.hour] += 1
+        Member.days[-1] += 1
+        self.days[-1] += 1
         for word in message.split():
             word = Text.strip(word)
             if word and word not in EXCLUDED:
@@ -69,7 +70,7 @@ class Member:
 
 
 class Text:
-    """Contain methods for working on plain text"""
+    """Contain methods for working on the chat file"""
 
     @staticmethod
     def strip(word):
@@ -82,73 +83,63 @@ class Text:
             word = word[1:]
         return word
 
-
-class Chat:
-    """Represent the chat data"""
-
-    # TODO nur in staticmethods arbeiten und data linie für linie bearbeiten
-
-    def __init__(self, path):
-        """Initializes object and reads the chat file"""
-        chfile = open(path, 'r')
-        self.chat = chfile.readlines()
-        chfile.close()
+    @staticmethod
+    def extract(line, members):
+        """Extract data out of one line"""
+        try:
+            date = dt.datetime(
+                2000+int(line[6:8]),
+                int(line[3:5]),
+                int(line[:2]),
+                hour=int(line[10:12])
+            )
+            # shift according to DAYSTART
+            date = date - dt.timedelta(days=1) if date.hour < DAYSTART else date
+            if not Member.first: Member.first = date.replace(hour=DAYSTART)
+            line = line[20:]
+            name, line = line.split(': ', 1)
+        except ValueError:
+            pass  # ignore status messages and corrupted messages
+        else:
+            # check if we have to change the index in the days list
+            while (date-Member.first).days >= Member.period:
+                Member.period += 1
+                Member.days.append(0)
+                for member in members:
+                    member.days.append(0)
+            # add data to member object
+            if all(member.name != name for member in members):
+                members.append(Member(name))
+            for member in members:
+                if member.name == name: member.add_message(line, date)
 
     @staticmethod
-    def strdate(s):
-        """Extract date and hour out of given string"""
-        return dt.date(2000+int(s[6:8]), int(s[3:5]), int(s[:2])), int(s[10:12])
+    def process(path):
+        """Extract and order data out of given chat file"""
+        members = []
+        prev = None
+        with open(path) as chat:
+            for line in chat:
+                if (
+                    len(line) > 20
+                    and line[2] == line[5] == '.'
+                    and line[8:10] == ', '
+                    and line[12] == line[15] == line[18] == ':'
+                ):
+                    if prev: Text.extract(prev, members)
+                    prev = line
+                else:
+                    if prev: prev = prev[:-1] + ' ' + line
+            Text.extract(prev, members)
+        return members
 
-    @staticmethod
-    def shftfive(date, hour):
-        """Shift date so that one day starts and ends at 4 in the morning"""
-        return date - dt.timedelta(days=1) if hour < 4 else date
-
+    '''
+    # TODO wenn wir das wegmachen auch das word dictionary und die strip function!
     @staticmethod
     def idf(word, members):
         """Calculate idf value for word in members"""
         return log(len(members) / len([m for m in members if word in m.words]))
-
-    def rnl(self):
-        """Replace newline chars in messages with spaces."""
-        res = []
-        prev = None
-        for msg in self.chat:
-            # check for correct date format
-            if len(msg) > 20 and msg[2] == msg[5] == '.' and msg[8:10] == ', ' and msg[12] == msg[15] == msg[18] == ':':
-                if prev: res.append(prev)
-                prev = msg
-            else:
-                # if first line is corrupted, ignore
-                if prev: prev = prev[:-1] + ' ' + msg
-        res.append(prev)
-        self.chat = res
-
-    def process(self):
-        """Order and prepare data for plotting"""
-        self.rnl()
-        members = []
-        Member.first = Chat.shftfive(*Chat.strdate(self.chat[0]))
-        Member.period = (Chat.shftfive(*Chat.strdate(self.chat[-1])) - Member.first).days + 1
-        Member.days = [0]*Member.period
-        # process messages
-        for line in self.chat:
-            try:
-                tmp = line
-                hour = int(line[10:12])
-                date = Chat.shftfive(*Chat.strdate(line))
-                line = line[20:]
-                name = line[:line.index(':')]
-                line = line[line.index(': ') + 2:]
-            except ValueError:
-                pass  # ignore corrupted messages
-            else:
-                if all(member.name != name for member in members):
-                    members.append(Member(name))
-                for member in members:
-                    if member.name == name:
-                        member.add_message(line, (date-Member.first).days, date.weekday(), hour)
-        return members
+    '''
 
 
 def trend(members):
@@ -160,7 +151,11 @@ def trend(members):
     # convert from daily message count to monthly average
     start = (
         Member.first if Member.first.day==1
-        else Member.first.replace(day=1, month=Member.first.month+1)
+        else Member.first.replace(
+                day=1,
+                month=Member.first.month%12+1,
+                year=Member.first.year+1 if Member.first.month==12 else Member.first.year
+        )
     )
     delta_months = (
         ((Member.first + dt.timedelta(days=Member.period)).year - start.year) * 12
@@ -177,7 +172,7 @@ def trend(members):
 
     # plot total messages per day
     plt.figure()
-    dates = [Member.first + dt.timedelta(days=i) for i in range(Member.period)]
+    dates = [Member.first.date() + dt.timedelta(days=i) for i in range(Member.period)]
     s = plt.stem(dates, Member.days, markerfmt=' ', basefmt=' ', label='Total Messages per Day')[1]
     plt.setp(s, linewidth=0.5, color=COLORS[2])
     # plot overall mean of messages per day
@@ -188,15 +183,19 @@ def trend(members):
     plt.plot(x, months, color=COLORS[0], label='Monthly Mean of Messages per Day')
 
     # set style attributes
-    plt.ylim(0, top=1.05*max(Member.days))
+    plt.xlim(
+        Member.first.date() - dt.timedelta(days=1), 
+        Member.first.date() + dt.timedelta(Member.period)
+    )
+    plt.ylim(0, 1.05*max(Member.days))
     plt.gca().yaxis.grid(True)
     plt.legend()
-    plt.title('Messages per Day')
+    plt.title('Messages per Day (Over a Period of ' + str(Member.period) + ' Days)')
 
     # annotate mean line
     plt.annotate(
         '{0:.{digits}f}'.format(mean, digits=2),
-        xy=(Member.first + dt.timedelta(days=Member.period-1), mean),
+        xy=(Member.first.date() + dt.timedelta(days=Member.period-1), mean),
         xytext=(8, -3),
         textcoords='offset points',
     )
@@ -226,7 +225,7 @@ def activity(members):
         [np.mean(members[i].days[k:k+7]) for k in range(index, Member.period, 7)]
         for i in range(len(members))
     ]
-    dates = [Member.first + dt.timedelta(days=i) for i in range(index, Member.period, 7)]
+    dates = [Member.first.date() + dt.timedelta(days=i) for i in range(index, Member.period, 7)]
 
     # plot multiple times with different emphasis
     for i, member in enumerate(members):
@@ -235,7 +234,7 @@ def activity(members):
         axarr[i].plot(dates, weeks[i], color=COLORS[i+6])
         # set style attributes
         axarr[i].yaxis.grid(True)
-        axarr[i].set_ylim(0, 1.1*max([max(l) for l in weeks]))
+        if weeks[0]: axarr[i].set_ylim(0, 1.1*max([max(l) for l in weeks]))
         axarr[i].set_ylabel(member.name, labelpad=20, rotation=0, ha='right')
 
     # set title
@@ -311,7 +310,7 @@ def shares(members):
     ]
     titles = [
         'Average Words per Message',
-        'Percentage of Media Files in Messages'
+        'Share of Media Files in Messages'
     ]
     for i in range(2):
         # plot overall mean
@@ -327,10 +326,6 @@ def shares(members):
         # set style attributes
         ax.xaxis.grid(True)
         ax.yaxis.set_visible(False)
-        if i:
-            start, end = ax.get_xlim()
-            ax.set_xticks([x / 100 for x in range(0, int(end*100)+1)])
-            ax.set_xticklabels(['{:.0f}%'.format(x*100) for x in plt.gca().get_xticks()])
 
 
 def times(members):
@@ -348,16 +343,16 @@ def times(members):
     fig = plt.figure()
     ax = fig.add_subplot(211, xmargin=0.1, ymargin=0.1)
     weekdays = [sum(Member.hours[i]) for i in range(7)]
-    means = list(map(lambda w, c: w / c, weekdays, weekday_counts))
+    means = list(map(lambda w, c: w / c if c else 0, weekdays, weekday_counts))
     for i in range(7):
         plt.plot((i*24, (i+1)*24), (means[i]/24,)*2, color=COLORS[1])
-    raw = [e / weekday_counts[i] for i, h in enumerate(Member.hours) for e in h]
+    raw = [e / c if c else 0 for h, c in zip(Member.hours, weekday_counts) for e in h]
     plt.plot(range(24*7+1), raw[DAYSTART:] + raw[:DAYSTART+1], COLORS[0])
 
     # set style attributes
     ax.grid(True)
-    ticks = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-    plt.xticks(range(0, 24*8, 24), ticks)
+    ticks = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    plt.xticks(range(0, 24*8, 24), [s + ' ' + str(DAYSTART).zfill(2) + ':00' for s in ticks])
     plt.title('Average Message Count per Hour of the Day (Whole Week)')
     patch, = plt.plot([], color=COLORS[1], label='Daily Mean')
     plt.legend(handles=[patch])
@@ -370,7 +365,7 @@ def times(members):
     for i in range(3):
         totals = [sum([Member.hours[day][hour] for day in ranges[i]]) for hour in range(24)]
         div = sum(weekday_counts[x] for x in ranges[i])
-        means = [x / div for x in totals]
+        means = [x / div if div else 0 for x in totals]
         # interpolate over longer interval to ensure that end points have same slopes
         means = means * 4
         # cubic interpolate
@@ -387,6 +382,7 @@ def times(members):
     plt.legend()
 
 
+'''
 def worduse_md(members, path='worduse.md'):
     """Generates markdown document with most used and most important (tf-idf) words for each user"""
     with open(path, 'w') as mdfile:
@@ -398,20 +394,17 @@ def worduse_md(members, path='worduse.md'):
             avg_per_msg_impt = [wd[1] / sum(m.days) for wd in most_impt]
             for wd_used, avg_used, wd_impt, avg_impt in zip(most_used, avg_per_msg_used, most_impt, avg_per_msg_impt):
                 mdfile.write(wd_used[0] + ' | ' + '{0:.3f}'.format(avg_used) + ' | ' + wd_impt[0] + '| {0:.3f}'.format(avg_impt) + '\n')
+'''
 
 
 if __name__ == '__main__':
-    chat = Chat(FILE)
-    members = sorted(chat.process(), key=lambda m: sum(m.days), reverse=True)
+    members = sorted(Text.process(PATH), key=lambda m: sum(m.days), reverse=True)
     # set custom plot style
     plt.style.use(os.path.join(sys.path[0], 'style.mplstyle'))
     # show plots
-    for plot in [trend, activity, shares, times]:  # [trend, activity, shares, times]
+    for plot in [trend, activity, shares, times]:
         plot(members)
         plt.gcf().canvas.set_window_title('Whatsapp Analyzer')
         plt.show(block=False)
     plt.show()
-
-    # Uncomment for generating a markdown file containing worduse statistics
-    # worduse_md(members)
 

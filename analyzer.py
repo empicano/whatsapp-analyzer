@@ -3,6 +3,8 @@ import os
 import numpy as np
 import datetime as dt
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
+import matplotlib.dates as mdates
 
 from math import log
 from random import sample
@@ -10,9 +12,15 @@ from scipy.interpolate import interp1d
 
 
 # path to chat file
-PATH = sys.argv[1] if len(sys.argv) > 1 else 'chat.txt'
+PATH = sys.argv[1]
 # define the hour in which a day starts and ends, set 0 for start at 00:00 and end at 23:59
 DAYSTART = 4
+# interval to consider
+BOUND = [None, None]
+if len(sys.argv) > 3:
+    for i in range(len(BOUND)):
+        BOUND[i] = dt.datetime.strptime(sys.argv[i+2], '%d.%m.%Y')
+        BOUND[i] = BOUND[i] - dt.timedelta(days=1) if BOUND[i].hour < DAYSTART else BOUND[i]
 # words excluded in all statistics
 EXCLUDED = ['<image', '<video', '<‎GIF', 'omitted>']
 # color scheme
@@ -41,7 +49,7 @@ class Member:
     # - werden sticker erkannt?
     # - auf 8 user begrenzen (inaktive cutten, ausprobieren, in den shares muss das rauskommen)
     # - für alle user anzahlen mal durchprobieren
-    # - lauter verschiedene Intervalle mal durchprobieren
+    # - times mal ohne interpolate ausprobieren
 
     hours = [[0]*24 for _ in range(7)]  # messages at weekday in hour
     period = 0  # time frame of chat in days
@@ -58,8 +66,9 @@ class Member:
     def add_message(self, message, date):
         """Add data from one message to the user object"""
         Member.hours[date.weekday()][date.hour] += 1
-        Member.days[-1] += 1
-        self.days[-1] += 1
+        index = (date - Member.first).days
+        Member.days[index] += 1
+        self.days[index] += 1
         for word in message.split():
             word = Text.strip(word)
             if word and word not in EXCLUDED:
@@ -93,16 +102,19 @@ class Text:
                 int(line[:2]),
                 hour=int(line[10:12])
             )
-            # shift according to DAYSTART
+            # shift date according to DAYSTART
             date = date - dt.timedelta(days=1) if date.hour < DAYSTART else date
-            if not Member.first: Member.first = date.replace(hour=DAYSTART)
+            if BOUND[0] and not (BOUND[0] <= date < BOUND[1]): return
+            if not Member.first:
+                if BOUND[0]: Member.first = BOUND[0]
+                else: Member.first = date.replace(hour=DAYSTART)
             line = line[20:]
             name, line = line.split(': ', 1)
         except ValueError:
             pass  # ignore status messages and corrupted messages
         else:
             # check if we have to change the index in the days list
-            while (date-Member.first).days >= Member.period:
+            while (max(date, BOUND[1] if BOUND[1] else date) - Member.first).days >= Member.period:
                 Member.period += 1
                 Member.days.append(0)
                 for member in members:
@@ -157,11 +169,8 @@ def trend(members):
                 year=Member.first.year+1 if Member.first.month==12 else Member.first.year
         )
     )
-    delta_months = (
-        ((Member.first + dt.timedelta(days=Member.period)).year - start.year) * 12
-        + (Member.first + dt.timedelta(days=Member.period)).month
-        - start.month
-    )
+    last = Member.first + dt.timedelta(days=Member.period)
+    delta_months = (last.year - start.year) * 12 + last.month - start.month
     # get indexes of first day of every month in days list
     indexes = [(start-Member.first).days] + [(start.replace(
         month=(start.month+i) % 12 + 1,
@@ -184,18 +193,27 @@ def trend(members):
 
     # set style attributes
     plt.xlim(
-        Member.first.date() - dt.timedelta(days=1), 
+        Member.first.date() - dt.timedelta(days=1),
         Member.first.date() + dt.timedelta(Member.period)
     )
     plt.ylim(0, 1.05*max(Member.days))
     plt.gca().yaxis.grid(True)
     plt.legend()
     plt.title('Messages per Day (Over a Period of ' + str(Member.period) + ' Days)')
+    # set formatter and locator (autolocator has problems setting good date xticks)
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+    plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=(Member.period // 250) or 1))
+    plt.gca().callbacks.connect(
+        'xlim_changed',
+        lambda ax: ax.xaxis.set_major_locator(
+            mdates.MonthLocator(interval=(int(ax.get_xlim()[1] - ax.get_xlim()[0]) // 250) or 1)
+        )
+    )
 
     # annotate mean line
     plt.annotate(
         '{0:.{digits}f}'.format(mean, digits=2),
-        xy=(Member.first.date() + dt.timedelta(days=Member.period-1), mean),
+        xy=(Member.first.date() + dt.timedelta(days=Member.period), mean),
         xytext=(8, -3),
         textcoords='offset points',
     )
@@ -222,10 +240,10 @@ def activity(members):
     fig, axarr = plt.subplots(len(members), sharex=True, sharey=True)
     index = (7 - Member.first.weekday()) % 7
     weeks = [
-        [np.mean(members[i].days[k:k+7]) for k in range(index, Member.period, 7)]
+        [np.mean(members[i].days[k:k+7]) for k in range(index, Member.period-6, 7)]
         for i in range(len(members))
     ]
-    dates = [Member.first.date() + dt.timedelta(days=i) for i in range(index, Member.period, 7)]
+    dates = [Member.first.date() + dt.timedelta(days=i) for i in range(index, Member.period-6, 7)]
 
     # plot multiple times with different emphasis
     for i, member in enumerate(members):
@@ -236,6 +254,19 @@ def activity(members):
         axarr[i].yaxis.grid(True)
         if weeks[0]: axarr[i].set_ylim(0, 1.1*max([max(l) for l in weeks]))
         axarr[i].set_ylabel(member.name, labelpad=20, rotation=0, ha='right')
+        plt.xlim(
+            Member.first.date() - dt.timedelta(days=1),
+            Member.first.date() + dt.timedelta(Member.period)
+        )
+        # set formatter and locator (autolocator has problems setting good date xticks)
+        axarr[i].xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+        axarr[i].xaxis.set_major_locator(mdates.MonthLocator(interval=(Member.period // 250) or 1))
+        axarr[i].callbacks.connect(
+            'xlim_changed',
+            lambda ax: ax.xaxis.set_major_locator(
+                mdates.MonthLocator(interval=(int(ax.get_xlim()[1] - ax.get_xlim()[0]) // 250) or 1)
+            )
+        )
 
     # set title
     fig.add_subplot(111, frameon=False)
@@ -301,7 +332,7 @@ def shares(members):
     # set title
     fig.add_subplot(121, frameon=False)
     plt.tick_params(labelcolor='none', left=False, bottom=False)
-    plt.title('Shares of Messages, Words and Media Files')
+    plt.title('Shares of Messages, Words and Media Files per User')
 
     # plot average number of words and media files per message
     averages = [
@@ -326,6 +357,7 @@ def shares(members):
         # set style attributes
         ax.xaxis.grid(True)
         ax.yaxis.set_visible(False)
+        if i: ax.xaxis.set_major_formatter(mtick.FuncFormatter(lambda x, _: str(x*100) + '%'))
 
 
 def times(members):

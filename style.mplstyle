@@ -1,4 +1,5 @@
-# see https://matplotlib.org/tutorials/introductory/customizing.html#customizing-with-matplotlibrc-files for an explanation of the different attributes
+# For an explanation of the different attributes, see:
+# https://matplotlib.org/tutorials/introductory/customizing.html#customizing-with-matplotlibrc-files
 
 axes.titlepad : 15
 axes.titleweight : bold
@@ -9,8 +10,6 @@ axes.spines.top : False
 axes.spines.right : False
 axes.axisbelow : True
 axes.labelsize : medium
-
-date.autoformatter.month : %b %Y
 
 figure.subplot.hspace : 0.25
 

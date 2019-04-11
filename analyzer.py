@@ -31,15 +31,17 @@ COLORS = [
     '#dddddd',  # background lines in activity plot
     '#ffa630',  # midweek line in times plot
     '#87bba2',  # weekend line in times plot
-    '#33658a',  # user 1
-    '#4d9de0',  # user 2
-    '#86bbd8',  # user 3
-    '#e1bc29',  # user 4
-    '#e28413',  # user 5
-    '#d76a03',  # user 6
-    '#bf3100',  # user 7
-    '#aa8f66',  # user 8
+    '#ef476f',  # user 1
+    '#118ab2',  # user 2
+    '#fcaa67',  # user 3
+    '#388659',  # user 4
+    '#ffd166',  # user 5
+    '#63b0cd',  # user 6
+    '#afa2ff',  # user 7
+    '#23c9ff',  # user 8
 ]
+# display up to this number of users, if greater, add up the rest and display as one
+MEMBERMAX = 8
 
 
 class Member:
@@ -47,7 +49,6 @@ class Member:
 
     # TODO
     # - werden sticker erkannt?
-    # - auf 8 user begrenzen (inaktive cutten, ausprobieren, in den shares muss das rauskommen)
     # - für alle user anzahlen mal durchprobieren
     # - times mal ohne interpolate ausprobieren
 
@@ -143,6 +144,18 @@ class Text:
                 else:
                     if prev: prev = prev[:-1] + ' ' + line
             Text.extract(prev, members)
+        members = sorted(members, key=lambda m: sum(m.days), reverse=True)
+        # if number of members is greater than MEMBERMAX, add up the rest
+        if len(members) > MEMBERMAX:
+            others = Member('Others')
+            for m in members[MEMBERMAX-1:]:
+                for i, d in enumerate(m.days):
+                    others.days[i] += d
+                others.media += m.media
+                for word, count in m.words.items():
+                    others.words.setdefault(word, 0)
+                    others.words[word] += count
+            members = members[:MEMBERMAX-1] + [others]
         return members
 
     '''
@@ -237,7 +250,8 @@ def activity(members):
     emphasizing one user at a time.
     """
     # compute weekly means
-    fig, axarr = plt.subplots(len(members), sharex=True, sharey=True)
+    fig, axarr = plt.subplots(len(members), sharex=True, sharey=True, squeeze=False)
+    axarr = [ax for lt in axarr for ax in lt]
     index = (7 - Member.first.weekday()) % 7
     weeks = [
         [np.mean(members[i].days[k:k+7]) for k in range(index, Member.period-6, 7)]
@@ -430,7 +444,7 @@ def worduse_md(members, path='worduse.md'):
 
 
 if __name__ == '__main__':
-    members = sorted(Text.process(PATH), key=lambda m: sum(m.days), reverse=True)
+    members = Text.process(PATH)
     # set custom plot style
     plt.style.use(os.path.join(sys.path[0], 'style.mplstyle'))
     # show plots

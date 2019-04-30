@@ -31,14 +31,14 @@ COLORS = [
     '#dddddd',  # background lines in activity plot
     '#ffa630',  # midweek line in times plot
     '#87bba2',  # weekend line in times plot
-    '#ef476f',  # user 1
-    '#118ab2',  # user 2
-    '#fcaa67',  # user 3
-    '#388659',  # user 4
-    '#ffd166',  # user 5
-    '#63b0cd',  # user 6
-    '#afa2ff',  # user 7
-    '#23c9ff',  # user 8
+    '#1b9e77',  # user 1
+    '#d95f02',  # user 2
+    '#7570b3',  # user 3
+    '#e7298a',  # user 4
+    '#66a61e',  # user 5
+    '#e6ab01',  # user 6
+    '#a6761d',  # user 7
+    '#666666',  # user 8
 ]
 # display up to this number of users, if greater, add up the rest and display as one
 MEMBERMAX = 8
@@ -49,7 +49,6 @@ class Member:
 
     # TODO
     # - werden sticker erkannt?
-    # - für alle user anzahlen mal durchprobieren
     # - times mal ohne interpolate ausprobieren
 
     hours = [[0]*24 for _ in range(7)]  # messages at weekday in hour
@@ -246,8 +245,8 @@ def trend(members):
 def activity(members):
     """Visualize member activity over whole chat period.
 
-    Display weekly means for every user multiple times in line charts
-    emphasizing one user at a time.
+    Display weekly means for every user in a spaghetti plot emphasizing
+    one user at a time.
     """
     # compute weekly means
     fig, axarr = plt.subplots(len(members), sharex=True, sharey=True, squeeze=False)
@@ -363,11 +362,9 @@ def shares(members):
         mean = sum(count[i+1]) / sum(Member.days)
         plt.axvline(mean, color=COLORS[1], label='Overall Mean', zorder=0)
         plt.legend()
-
         # plot bar chart
         plt.barh(range(len(members)), averages[i], 0.5, color=COLORS[5+len(members):5:-1])
         plt.title(titles[i])
-
         # set style attributes
         ax.xaxis.grid(True)
         ax.yaxis.set_visible(False)
@@ -380,14 +377,13 @@ def times(members):
     This includes message count mean per hour of the day and message
     count mean per day of the week.
     """
-    fwd = Member.first.weekday()  # weekday of first message
-    lwd = (Member.first + dt.timedelta(days=Member.period-1)).weekday()  # weekday of last message
-    week_count = (Member.period - (7-fwd) - (lwd+1)) / 7
-    weekday_counts = [(week_count + (i >= fwd) + (i <= lwd)) for i in range(7)]
+    weekday_counts = [0]*7
+    for i in range(Member.period):
+        weekday_counts[(Member.first + dt.timedelta(days=i)).weekday()] += 1
 
     # plot message count mean per hour of the day (whole week)
     fig = plt.figure()
-    ax = fig.add_subplot(211, xmargin=0.1, ymargin=0.1)
+    ax = fig.add_subplot(211, xmargin=0.05, ymargin=0.1)
     weekdays = [sum(Member.hours[i]) for i in range(7)]
     means = list(map(lambda w, c: w / c if c else 0, weekdays, weekday_counts))
     for i in range(7):
@@ -404,26 +400,23 @@ def times(members):
     plt.legend(handles=[patch])
 
     # plot message count mean per hour of the day (one day)
-    ax = fig.add_subplot(212)
-    x = np.linspace(DAYSTART, DAYSTART+24, num=1000)
+    ax = fig.add_subplot(212, xmargin=0.05)
     labels = ['Overall', 'Midweek (MTWT)', 'Weekend (FSS)']
     ranges = [range(7), range(4), range(4, 7)]
+    maximum = 0
     for i in range(3):
         totals = [sum([Member.hours[day][hour] for day in ranges[i]]) for hour in range(24)]
         div = sum(weekday_counts[x] for x in ranges[i])
         means = [x / div if div else 0 for x in totals]
-        # interpolate over longer interval to ensure that end points have same slopes
-        means = means * 4
-        # cubic interpolate
-        f = interp1d(range(-24, 72), means, kind='cubic')
-        if i: plt.plot(x, f(x), COLORS[i+3], lw=1.5, ls=':', label=labels[i])
-        else: plt.plot(x, f(x), COLORS[0], label=labels[0], zorder=10)
+        means.append(means[0])
+        if i: plt.plot(range(25), means, COLORS[i+3], lw=1.5, ls=':', label=labels[i])
+        else: plt.plot(range(25), means, COLORS[0], label=labels[0], zorder=10)
+        maximum = max(maximum, max(means))
 
     # set style attributes
     ax.grid(True)
-    scope = max(f(x)) - min(f(x))
-    plt.ylim(-0.1*scope, max(f(x))+0.1*scope)
-    plt.xticks(range(DAYSTART, DAYSTART+25), list(range(DAYSTART, 24)) + list(range(DAYSTART+1)))
+    plt.ylim(-0.1*maximum, 1.1*maximum)
+    plt.xticks(range(25), list(range(DAYSTART, 24)) + list(range(DAYSTART+1)))
     plt.title('Average Message Count per Hour of the Day (One Day)')
     plt.legend()
 
@@ -448,7 +441,7 @@ if __name__ == '__main__':
     # set custom plot style
     plt.style.use(os.path.join(sys.path[0], 'style.mplstyle'))
     # show plots
-    for plot in [trend, activity, shares, times]:
+    for plot in [times]:  # trend, activity, shares, times]:
         plot(members)
         plt.gcf().canvas.set_window_title('Whatsapp Analyzer')
         plt.show(block=False)

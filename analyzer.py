@@ -1,14 +1,15 @@
 import sys
 import os
-import numpy as np
 import datetime as dt
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
 import matplotlib.dates as mdates
 
+from matplotlib.lines import Line2D
 from math import log
 from random import sample
-from scipy.interpolate import interp1d
+from numpy import mean
 
 
 # path to chat file
@@ -49,7 +50,7 @@ class Member:
 
     # TODO
     # - werden sticker erkannt?
-    # - times mal ohne interpolate ausprobieren
+    # - durchschnittliche reponse zeit in sonem wellen plot (wie der wie gut ist good, well, ...)
 
     hours = [[0]*24 for _ in range(7)]  # messages at weekday in hour
     period = 0  # time frame of chat in days
@@ -62,13 +63,15 @@ class Member:
         self.words = {}
         self.days = [0]*Member.period  # messages mapped on days (one user)
         self.media = 0  # number of media files sent
+        self.connections = []
 
-    def add_message(self, message, date):
+    def add_message(self, message, date, pidx):
         """Add data from one message to the user object"""
         Member.hours[date.weekday()][date.hour] += 1
         index = (date - Member.first).days
         Member.days[index] += 1
         self.days[index] += 1
+        self.connections[pidx] += 1
         for word in message.split():
             word = Text.strip(word)
             if word and word not in EXCLUDED:
@@ -93,7 +96,7 @@ class Text:
         return word
 
     @staticmethod
-    def extract(line, members):
+    def extract(line, members, predec):
         """Extract data out of one line"""
         try:
             date = dt.datetime(
@@ -122,27 +125,36 @@ class Text:
             # add data to member object
             if all(member.name != name for member in members):
                 members.append(Member(name))
-            for member in members:
-                if member.name == name: member.add_message(line, date)
+                for m in members:
+                    while len(m.connections) < len(members):
+                        m.connections.append(0)
+            for m in members:
+                if m.name == name:
+                    m.add_message(line, date, members.index(predec) if predec else 0)
+                    return m
 
     @staticmethod
     def process(path):
         """Extract and order data out of given chat file"""
         members = []
-        prev = None
+        prev = None  # previous line in chat file
+        predec = None  # author of previous message (predecessor)
         with open(path) as chat:
             for line in chat:
+                n = None
                 if (
                     len(line) > 20
                     and line[2] == line[5] == '.'
                     and line[8:10] == ', '
                     and line[12] == line[15] == line[18] == ':'
                 ):
-                    if prev: Text.extract(prev, members)
+                    if prev:
+                        n = Text.extract(prev, members, predec)
+                        predec = n if n else predec
                     prev = line
                 else:
                     if prev: prev = prev[:-1] + ' ' + line
-            Text.extract(prev, members)
+            Text.extract(prev, members, predec)
         members = sorted(members, key=lambda m: sum(m.days), reverse=True)
         # if number of members is greater than MEMBERMAX, add up the rest
         if len(members) > MEMBERMAX:
@@ -189,7 +201,7 @@ def trend(members):
         year=start.year + (start.month+i) // 12
     ) - Member.first).days for i in range(0, delta_months)]
     # get monthly messages/day mean
-    months = [np.mean(Member.days[indexes[i]:indexes[i+1]]) for i in range(len(indexes)-1)]
+    months = [mean(Member.days[indexes[i]:indexes[i+1]]) for i in range(len(indexes)-1)]
 
     # plot total messages per day
     plt.figure()
@@ -197,8 +209,8 @@ def trend(members):
     s = plt.stem(dates, Member.days, markerfmt=' ', basefmt=' ', label='Total Messages per Day')[1]
     plt.setp(s, linewidth=0.5, color=COLORS[2])
     # plot overall mean of messages per day
-    mean = np.mean(Member.days)
-    plt.axhline(mean, color=COLORS[1], label='Overall Mean of Messages per Day')
+    mn = mean(Member.days)
+    plt.axhline(mn, color=COLORS[1], label='Overall Mean of Messages per Day')
     # plot monthly mean of messages per day
     x = [dates[i] for i in indexes[:-1]]
     plt.plot(x, months, color=COLORS[0], label='Monthly Mean of Messages per Day')
@@ -224,8 +236,8 @@ def trend(members):
 
     # annotate mean line
     plt.annotate(
-        '{0:.{digits}f}'.format(mean, digits=2),
-        xy=(Member.first.date() + dt.timedelta(days=Member.period), mean),
+        '{0:.{digits}f}'.format(mn, digits=2),
+        xy=(Member.first.date() + dt.timedelta(days=Member.period), mn),
         xytext=(8, -3),
         textcoords='offset points',
     )
@@ -253,7 +265,7 @@ def activity(members):
     axarr = [ax for lt in axarr for ax in lt]
     index = (7 - Member.first.weekday()) % 7
     weeks = [
-        [np.mean(members[i].days[k:k+7]) for k in range(index, Member.period-6, 7)]
+        [mean(members[i].days[k:k+7]) for k in range(index, Member.period-6, 7)]
         for i in range(len(members))
     ]
     dates = [Member.first.date() + dt.timedelta(days=i) for i in range(index, Member.period-6, 7)]
@@ -421,6 +433,59 @@ def times(members):
     plt.legend()
 
 
+def network(members):
+    """Visualize network structures.
+
+    Display how often users interact with each other in an alluvial
+    diagram.
+    """
+    class LineDataUnits(Line2D):
+        """Line taking lw argument in y axis units instead of points"""
+        def __init__(self, *args, **kwargs):
+            _lw_data = kwargs.pop('lw', 1)
+            super().__init__(*args, **kwargs)
+            self._lw_data = _lw_data
+
+        def _get_lw(self):
+            if self.axes is not None:
+                ppd = 72./self.axes.figure.dpi
+                trans = self.axes.transData.transform
+                return ((trans((1, self._lw_data)) - trans((0, 0))) * ppd)[1]
+            else:
+                return 1
+
+        def _set_lw(self, lw):
+            self._lw_data = lw
+
+        _linewidth = property(_get_lw, _set_lw)
+
+    def ease(y0, y1):
+        """Return ease in out function from point (0, y0) to (1, y1)"""
+        return y0 + (y1-y0) * x**2 / (x**2 + (1-x)**2)
+
+    fig, ax = plt.subplots()
+    x = np.linspace(0, 1)
+    total = sum(Member.days)
+    net = [list(map(lambda x: x/total, m.connections)) for m in members]
+    posr = 1 + len(members)*0.05
+    for i in range(len(members)):
+        for j in range(len(members)):
+            posl = 1 + (len(members)-1-j)*0.05 - sum([sum(net[k]) for k in range(j)])
+            posl -= sum(net[j][:i]) + net[j][i] / 2
+            posr -= net[j][i] + (0.05 if j == 0 else 0)
+            ax.add_line(LineDataUnits(
+                x,
+                ease(posl, posr+net[j][i]/2),
+                lw=net[j][i],
+                alpha=0.5,
+                color=COLORS[j+6]
+            ))
+
+    # set style attributes
+    plt.ylim(0, 0.95 + len(members)*0.05)
+    ax.set_axis_off()
+
+
 '''
 def worduse_md(members, path='worduse.md'):
     """Generates markdown document with most used and most important (tf-idf) words for each user"""
@@ -441,7 +506,7 @@ if __name__ == '__main__':
     # set custom plot style
     plt.style.use(os.path.join(sys.path[0], 'style.mplstyle'))
     # show plots
-    for plot in [times]:  # trend, activity, shares, times]:
+    for plot in [network]: #, trend, activity, shares, times, network]:
         plot(members)
         plt.gcf().canvas.set_window_title('Whatsapp Analyzer')
         plt.show(block=False)

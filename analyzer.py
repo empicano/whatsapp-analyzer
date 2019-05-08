@@ -51,6 +51,7 @@ class Member:
     # TODO
     # - werden sticker erkannt?
     # - durchschnittliche reponse zeit in sonem wellen plot (wie der wie gut ist good, well, ...)
+    # - alles mit ner test-chat datei durchtesten (DONE: network)
 
     hours = [[0]*24 for _ in range(7)]  # messages at weekday in hour
     period = 0  # time frame of chat in days
@@ -63,15 +64,16 @@ class Member:
         self.words = {}
         self.days = [0]*Member.period  # messages mapped on days (one user)
         self.media = 0  # number of media files sent
-        self.connections = []
+        self.answers = {}
 
-    def add_message(self, message, date, pidx):
+    def add_message(self, message, date, predec):
         """Add data from one message to the user object"""
         Member.hours[date.weekday()][date.hour] += 1
         index = (date - Member.first).days
         Member.days[index] += 1
         self.days[index] += 1
-        self.connections[pidx] += 1
+        self.answers.setdefault(predec, 0)
+        self.answers[predec] += 1
         for word in message.split():
             word = Text.strip(word)
             if word and word not in EXCLUDED:
@@ -125,13 +127,11 @@ class Text:
             # add data to member object
             if all(member.name != name for member in members):
                 members.append(Member(name))
-                for m in members:
-                    while len(m.connections) < len(members):
-                        m.connections.append(0)
             for m in members:
                 if m.name == name:
-                    m.add_message(line, date, members.index(predec) if predec else 0)
-                    return m
+                    m.add_message(line, date, predec)
+                    return m.name
+        return predec
 
     @staticmethod
     def process(path):
@@ -149,8 +149,7 @@ class Text:
                     and line[12] == line[15] == line[18] == ':'
                 ):
                     if prev:
-                        n = Text.extract(prev, members, predec)
-                        predec = n if n else predec
+                        predec = Text.extract(prev, members, predec)
                     prev = line
                 else:
                     if prev: prev = prev[:-1] + ' ' + line
@@ -321,24 +320,12 @@ def shares(members):
         for j, member in enumerate(members):
             x = plt.bar(0.6, shares[j], 0.6, bottom=sum(shares[:j]), color=COLORS[len(members)-j+5])
             p = x.patches[0]
-            # annotate segment with total value
+            # annotate segments with total value
             if p.get_height() > 0.03:
-                ax.text(
-                    p.get_x() + p.get_width() / 2,
-                    p.get_y() + p.get_height() / 2,
-                    c[j],
-                    ha='center',
-                    va='center',
-                )
+                ax.text(0.6, p.get_y() + shares[j] / 2, c[j], ha='center', va='center')
             # annotate segments with user names
             if i == 0:
-                ax.text(
-                    -0.3,
-                    p.get_y() + p.get_height() / 2,
-                    member.name,
-                    ha='right',
-                    va='center'
-                )
+                ax.text(-0.3, p.get_y() + shares[j] / 2, member.name, ha='right', va='center')
 
         # set style attributes
         ax.spines['bottom'].set_visible(False)
@@ -434,13 +421,13 @@ def times(members):
 
 
 def network(members):
-    """Visualize network structures.
+    """Visualize reponse network structures.
 
-    Display how often users interact with each other in an alluvial
+    Display how often users answer to each other user in an alluvial
     diagram.
     """
     class LineDataUnits(Line2D):
-        """Line taking lw argument in y axis units instead of points"""
+        """Line2D taking lw argument in y axis units instead of points"""
         def __init__(self, *args, **kwargs):
             _lw_data = kwargs.pop('lw', 1)
             super().__init__(*args, **kwargs)
@@ -464,27 +451,37 @@ def network(members):
         return y0 + (y1-y0) * x**2 / (x**2 + (1-x)**2)
 
     fig, ax = plt.subplots()
-    x = np.linspace(0, 1)
-    total = sum(Member.days)
-    net = [list(map(lambda x: x/total, m.connections)) for m in members]
-    posr = 1 + len(members)*0.05
+    x = np.linspace(0.01, 0.99)
+    s = sum(Member.days) - 1
+    net = [[m.answers[c.name]/s if c.name in m.answers else 0 for c in members] for m in members]
+    spc = 0.05  # spacing between groups
+    posr = 1 + len(members)*spc
     for i in range(len(members)):
-        for j in range(len(members)):
-            posl = 1 + (len(members)-1-j)*0.05 - sum([sum(net[k]) for k in range(j)])
-            posl -= sum(net[j][:i]) + net[j][i] / 2
-            posr -= net[j][i] + (0.05 if j == 0 else 0)
+        for j, m in enumerate(members):
+            posl = 1 + (len(members)-1-j)*spc - sum([sum(net[k]) for k in range(j)])
+            posl -= sum(net[j][:i]) + net[j][i]
+            posr -= net[j][i] + (spc if j == 0 else 0)
+            # draw limitations
+            p = plt.bar(0, net[j][i], 0.01, posl, color='black', align='edge').patches[0]
+            plt.bar(1, net[j][i], -0.01, posr, color='black', align='edge')
+            # annotate segments with user names
+            if i == 0:
+                tpos = 1 + len(members)*spc - spc
+                tpos -= sum([sum(net[k]) for k in range(j)]) + sum(net[j])/2 + j*spc
+                ax.text(-0.043, tpos, m.name, ha='right', va='center')
+            # draw alluvial lines
             ax.add_line(LineDataUnits(
                 x,
-                ease(posl, posr+net[j][i]/2),
+                ease(posl+net[j][i]/2, posr+net[j][i]/2),
                 lw=net[j][i],
                 alpha=0.5,
                 color=COLORS[j+6]
             ))
 
     # set style attributes
-    plt.ylim(0, 0.95 + len(members)*0.05)
+    plt.ylim(0, 1 + len(members)*spc - spc)
+    plt.title('Reponse Network')
     ax.set_axis_off()
-
 
 '''
 def worduse_md(members, path='worduse.md'):

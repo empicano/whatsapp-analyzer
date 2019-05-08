@@ -61,7 +61,7 @@ class Member:
     def __init__(self, name):
         """Initialize member object"""
         self.name = name
-        self.words = {}
+        self.words = 0
         self.days = [0]*Member.period  # messages mapped on days (one user)
         self.media = 0  # number of media files sent
         self.answers = {}
@@ -75,27 +75,14 @@ class Member:
         self.answers.setdefault(predec, 0)
         self.answers[predec] += 1
         for word in message.split():
-            word = Text.strip(word)
-            if word and word not in EXCLUDED:
-                self.words.setdefault(word, 0)
-                self.words[word] += 1
+            if word not in EXCLUDED:
+                self.words += 1
             elif word == 'omitted>':
                 self.media += 1
 
 
 class Text:
     """Contain methods for working on the chat file"""
-
-    @staticmethod
-    def strip(word):
-        """Strip word of dots, quotation marks etc."""
-        word = word.lower()
-        chars = ',."\'*-~—_/#:;!?&()'
-        while word and word[-1] in chars:
-            word = word[:-1]
-        while word and word[0] in chars:
-            word = word[1:]
-        return word
 
     @staticmethod
     def extract(line, members, predec):
@@ -116,7 +103,7 @@ class Text:
             line = line[20:]
             name, line = line.split(': ', 1)
         except ValueError:
-            pass  # ignore status messages and corrupted messages
+            pass  # ignore status messages
         else:
             # check if we have to change the index in the days list
             while (max(date, BOUND[1] if BOUND[1] else date) - Member.first).days >= Member.period:
@@ -148,8 +135,7 @@ class Text:
                     and line[8:10] == ', '
                     and line[12] == line[15] == line[18] == ':'
                 ):
-                    if prev:
-                        predec = Text.extract(prev, members, predec)
+                    if prev: predec = Text.extract(prev, members, predec)
                     prev = line
                 else:
                     if prev: prev = prev[:-1] + ' ' + line
@@ -167,14 +153,6 @@ class Text:
                     others.words[word] += count
             members = members[:MEMBERMAX-1] + [others]
         return members
-
-    '''
-    # TODO wenn wir das wegmachen auch das word dictionary und die strip function!
-    @staticmethod
-    def idf(word, members):
-        """Calculate idf value for word in members"""
-        return log(len(members) / len([m for m in members if word in m.words]))
-    '''
 
 
 def trend(members):
@@ -309,7 +287,7 @@ def shares(members):
     members = members[::-1]
     count = [
         [sum(m.days) for m in members],
-        [sum(m.words.values()) for m in members],
+        [m.words for m in members],
         [m.media for m in members]
     ]
     for i in range(3):
@@ -348,7 +326,7 @@ def shares(members):
 
     # plot average number of words and media files per message
     averages = [
-        [sum(m.words.values()) / sum(m.days) for m in members],
+        [m.words / sum(m.days) for m in members],
         [m.media / sum(m.days) for m in members]
     ]
     titles = [
@@ -482,20 +460,6 @@ def network(members):
     plt.ylim(0, 1 + len(members)*spc - spc)
     plt.title('Reponse Network')
     ax.set_axis_off()
-
-'''
-def worduse_md(members, path='worduse.md'):
-    """Generates markdown document with most used and most important (tf-idf) words for each user"""
-    with open(path, 'w') as mdfile:
-        for m in sorted(members, key=lambda e: len(e.words), reverse=True):
-            mdfile.write('# ' + m.name + '\nMost used words | Frequency in messages | Most important (tf-idf) words | Frequency in messages\n-|-|-|-\n')
-            most_used = sorted(m.words.items(), key=lambda e: e[1], reverse=True)[:15]
-            avg_per_msg_used = [wd[1] / sum(m.days) for wd in most_used]
-            most_impt = sorted(m.words.items(), key=lambda x: x[1] * Chat.idf(x[0], members), reverse=True)[:15]
-            avg_per_msg_impt = [wd[1] / sum(m.days) for wd in most_impt]
-            for wd_used, avg_used, wd_impt, avg_impt in zip(most_used, avg_per_msg_used, most_impt, avg_per_msg_impt):
-                mdfile.write(wd_used[0] + ' | ' + '{0:.3f}'.format(avg_used) + ' | ' + wd_impt[0] + '| {0:.3f}'.format(avg_impt) + '\n')
-'''
 
 
 if __name__ == '__main__':

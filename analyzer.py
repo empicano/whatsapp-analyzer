@@ -139,11 +139,21 @@ class Text:
             for m in members[MEMBERMAX-1:]:
                 for i, d in enumerate(m.days):
                     others.days[i] += d
+                others.words += m.words
                 others.media += m.media
-                for word, count in m.words.items():
-                    others.words.setdefault(word, 0)
-                    others.words[word] += count
+                for n, c in m.answers.items():
+                    others.answers.setdefault(n, 0)
+                    others.answers[n] += c
             members = members[:MEMBERMAX-1] + [others]
+            for m in members:
+                m.answers.setdefault('Others', 0)
+                drop = []
+                for n, c in m.answers.items():
+                    if n not in [m.name for m in members]:
+                        m.answers['Others'] += m.answers[n]
+                        drop.append(m.answers[n])
+                for n in drop:
+                    m.answers.pop(n, None)
         return members
 
 
